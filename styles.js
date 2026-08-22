@@ -444,6 +444,28 @@ export const styles = {
     borderRadius: 8,
     cursor: disabled ? "default" : "pointer",
   }),
+  // menuItem, but for an <a>: same row, minus the underline a link brings
+  // with it.
+  menuLink: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    width: "100%",
+    padding: "9px 10px",
+    fontSize: 13.5,
+    fontWeight: 600,
+    textAlign: "left",
+    color: "var(--text)",
+    background: "transparent",
+    border: "none",
+    borderRadius: 8,
+    textDecoration: "none",
+    cursor: "pointer",
+  },
+  menuLinkArrow: {
+    marginLeft: "auto",
+    color: "var(--text-faint)",
+  },
   menuItemNote: {
     marginLeft: "auto",
     fontSize: 10,

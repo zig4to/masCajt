@@ -18,6 +18,7 @@ import {
   Smartphone,
   Check,
   Link,
+  ArrowUpRight,
   ListChecks,
   Megaphone,
   RefreshCw,
@@ -3151,6 +3152,19 @@ export default function App() {
             <Archive size={14} /> Arhiv
             {view === "archive" && <span style={styles.menuItemNote}>tu si</span>}
           </button>
+          {/* A link out, not a view: this one leaves the app, which is why it
+              is an anchor and why it says so with an arrow rather than
+              pretending to be another page of the calendar. */}
+          <a
+            style={styles.menuLink}
+            href={CHECKLIST_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMenuOpen(false)}
+          >
+            <ListChecks size={14} /> Checkliste
+            <ArrowUpRight size={13} style={styles.menuLinkArrow} />
+          </a>
           <button
             style={styles.menuItem(false)}
             onClick={() => {
