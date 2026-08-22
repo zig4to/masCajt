@@ -1517,13 +1517,33 @@ export const styles = {
     color: "#fff",
     opacity: 0.75,
   },
+  // Green on the dark overlay rather than the card-coloured link buttons:
+  // the bar sits over a photo, and anything with a light fill reads as part
+  // of the picture.
+  lightboxAction: {
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: GREEN,
+    background: GREEN_BG,
+    border: `1px solid ${GREEN}`,
+    borderRadius: 7,
+    padding: "4px 8px",
+    cursor: "pointer",
+  },
   lightboxBar: {
     display: "flex",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
+    justifyContent: "flex-end",
+    // Four controls beside an author name is more than a narrow phone
+    // fits on one line.
+    flexWrap: "wrap",
+    gap: 8,
   },
   lightboxAuthor: {
+    marginRight: "auto",
     fontSize: 12.5,
     color: "#fff",
     opacity: 0.85,

@@ -19,6 +19,7 @@ import {
   Check,
   Link,
   ArrowUpRight,
+  FolderDown,
   ListChecks,
   Megaphone,
   RefreshCw,
@@ -618,6 +619,26 @@ export function photoAlbums(photos) {
     });
 }
 
+// Filenames have to survive leaving the browser. Diacritics and spaces are
+// what a Windows share or an Android file manager mangles, so a name is cut
+// down to plain ascii before it becomes one.
+export function slugName(name) {
+  const map = { č: "c", ć: "c", š: "s", ž: "z", đ: "d" };
+  return (
+    (name || "")
+      .toLowerCase()
+      .replace(/[čćšžđ]/g, (c) => map[c])
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "neznano"
+  );
+}
+
+// Dated and named, because a photo saved out of here lands in a folder with
+// everyone else's and "1787431617661.jpg" tells nobody anything.
+export function photoFileName(iso, author, n) {
+  return `${iso}-${slugName(author)}-${n}.jpg`;
+}
+
 export function sortPhotos(list) {
   return [...list].sort((a, b) => Number(a.id) - Number(b.id) || a.id.localeCompare(b.id));
 }
@@ -1077,7 +1098,18 @@ const NAME_POPUP_MS = 3000;
 // Its own component so the drag lives beside the thing being dragged. App is
 // long enough already, and this needs three pieces of state that nothing
 // else in it would ever read.
-function PhotoLightbox({ photos, index, urlFor, onClose, onSelect, canDelete, onDelete }) {
+function PhotoLightbox({
+  photos,
+  index,
+  urlFor,
+  onClose,
+  onSelect,
+  canDelete,
+  onDelete,
+  onDownload,
+  onDownloadAll,
+  downloading,
+}) {
   const [dragPx, setDragPx] = useState(0);
   const [dragging, setDragging] = useState(false);
   const startRef = useRef(null);
@@ -1180,7 +1212,33 @@ function PhotoLightbox({ photos, index, urlFor, onClose, onSelect, canDelete, on
               {index + 1} / {photos.length}
             </span>
           )}
-          {/* Only your own, the rule the comments already follow. */}
+          {/* Saving is everyone's -- the pictures are the point of the
+              archive -- while deleting stays only your own, the rule the
+              comments already follow. */}
+          <button
+            style={styles.lightboxAction}
+            onClick={onDownload}
+            disabled={!!downloading}
+            aria-label="Prenesi sliko"
+          >
+            <Download size={12} />
+            {downloading && downloading.total === 1
+              ? "Prenašam …"
+              : "Prenesi"}
+          </button>
+          {photos.length > 1 && (
+            <button
+              style={styles.lightboxAction}
+              onClick={onDownloadAll}
+              disabled={!!downloading}
+              aria-label="Prenesi cel album"
+            >
+              <FolderDown size={12} />
+              {downloading && downloading.total > 1
+                ? `${downloading.done}/${downloading.total}`
+                : `Vse (${photos.length})`}
+            </button>
+          )}
           {canDelete && (
             <button style={styles.deleteButton} onClick={onDelete}>
               <Trash2 size={12} /> Odstrani
@@ -1637,6 +1695,9 @@ export default function App() {
   const [lightbox, setLightbox] = useState(null);
   // { inputId } while the notice before the file picker is up, else null.
   const [photoNotice, setPhotoNotice] = useState(null);
+  // { done, total } while a save is running, so the buttons can say how far
+  // along a twenty-photo album is instead of looking frozen.
+  const [photoDownload, setPhotoDownload] = useState(null);
   // Push: "unsupported" | "blocked" | "needs-install" | "off" | "on", plus a
   // busy flag while the browser is being asked. Derived on mount rather than
   // stored, since the permission can be changed outside the app.
@@ -2728,6 +2789,72 @@ export default function App() {
   // from losing every photo, and unlike an availability entry there is no
   // second copy to retype it from. Clearing the orphaned files is a job for
   // the dashboard, not for whoever taps this.
+  // A download attribute is ignored on a cross-origin href -- the browser
+  // opens the picture instead of saving it -- and every photo here is served
+  // from Supabase storage. Fetching the bytes and handing over a blob URL of
+  // our own is what makes the button mean save. Storage answers with
+  // Access-Control-Allow-Origin: *, so the fetch is allowed to read them.
+  function saveBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoked late rather than straight after the click: Safari reads the
+    // blob once the handler has returned, and pulling it out from under the
+    // download cancels it.
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  async function downloadPhoto(photo, iso, n) {
+    if (photoDownload || !window.photos) return;
+    setPhotoDownload({ done: 0, total: 1 });
+    try {
+      const res = await fetch(window.photos.publicUrl(photo.path));
+      if (!res.ok) throw new Error(String(res.status));
+      saveBlob(await res.blob(), photoFileName(iso, photo.author, n));
+    } catch (e) {
+      setError("Slike ni bilo mogoče prenesti. Poskusi znova.");
+    } finally {
+      setPhotoDownload(null);
+    }
+  }
+
+  async function downloadAlbum(photos, iso, author) {
+    if (photoDownload || !window.photos || !photos.length) return;
+    setPhotoDownload({ done: 0, total: photos.length });
+    try {
+      // Fetched only when someone actually asks for a zip. Nobody browsing
+      // the archive should pay for a library they never use.
+      const { zipSync } = await import("https://esm.sh/fflate@0.8.2");
+      const files = {};
+      // One at a time, not Promise.all: it keeps the peak to a single
+      // response on top of what is already collected, and it is what lets
+      // the button count upwards honestly.
+      for (let i = 0; i < photos.length; i++) {
+        const res = await fetch(window.photos.publicUrl(photos[i].path));
+        if (!res.ok) throw new Error(String(res.status));
+        files[photoFileName(iso, author, i + 1)] = new Uint8Array(
+          await res.arrayBuffer()
+        );
+        setPhotoDownload({ done: i + 1, total: photos.length });
+      }
+      // Stored, not deflated: a JPEG is already compressed, and squeezing it
+      // again spends seconds of a phone's CPU to save nothing.
+      const zipped = zipSync(files, { level: 0 });
+      saveBlob(
+        new Blob([zipped], { type: "application/zip" }),
+        `${iso}-${slugName(author)}.zip`
+      );
+    } catch (e) {
+      setError("Slik ni bilo mogoče prenesti. Poskusi znova.");
+    } finally {
+      setPhotoDownload(null);
+    }
+  }
+
   async function deletePhoto(iso, eventId, photoId) {
     const group = photoGroup(iso, eventId);
     setDayPhotos((prev) => ({
@@ -3394,6 +3521,21 @@ export default function App() {
       }
       canDelete={lightboxPhotos[lightboxIndex].author === name}
       onDelete={() => deletePhoto(lightbox.iso, lightbox.eventId, lightbox.id)}
+      downloading={photoDownload}
+      onDownload={() =>
+        downloadPhoto(
+          lightboxPhotos[lightboxIndex],
+          lightbox.iso,
+          lightboxIndex + 1
+        )
+      }
+      onDownloadAll={() =>
+        downloadAlbum(
+          lightboxPhotos,
+          lightbox.iso,
+          lightboxPhotos[lightboxIndex].author
+        )
+      }
     />
   );
 
