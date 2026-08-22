@@ -57,6 +57,15 @@ async function openToday(page) {
   await page.waitForTimeout(300);
 }
 
+// The app builds today from the local clock. Taken from toISOString() instead,
+// this ran an hour ahead or a day behind depending on the timezone: between
+// local midnight and UTC midnight the fixtures landed on a day the calendar
+// was no longer showing, and every test here failed looking for an event on a
+// card that was not there. "sv-SE" is ISO order, formatted locally.
+function localToday() {
+  return new Intl.DateTimeFormat("sv-SE").format(new Date());
+}
+
 function eventRow(iso, idSuffix, value) {
   return { key: `avail:${iso}:__event__${idSuffix}`, value: JSON.stringify(value) };
 }
@@ -82,7 +91,7 @@ async function runTest(name, fn) {
   try {
     await runTest("edit prefills fields for a normal, current-format event", async () => {
       const page = await browser.newPage({ viewport: { width: 480, height: 900 } });
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       await mockKvStore(page, [
         eventRow(today, "111111", {
           title: "Test Dogodek",
@@ -109,7 +118,7 @@ async function runTest(name, fn) {
       // bug report: no id suffix on the key, and "20:00 - 22:00" instead of
       // "20:00–22:00".
       const page = await browser.newPage({ viewport: { width: 480, height: 900 } });
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       await mockKvStore(page, [
         eventRow(today, "", {
           title: "Odbojka",
@@ -133,7 +142,7 @@ async function runTest(name, fn) {
 
     await runTest("editing the second of two events on the same day loads the right one", async () => {
       const page = await browser.newPage({ viewport: { width: 480, height: 900 } });
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       await mockKvStore(page, [
         eventRow(today, "111111", {
           title: "Prvi Dogodek",
@@ -163,7 +172,7 @@ async function runTest(name, fn) {
 
     await runTest("canceling a new-event draft doesn't leak into the next form opened", async () => {
       const page = await browser.newPage({ viewport: { width: 480, height: 900 } });
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       await mockKvStore(page, [
         eventRow(today, "111111", {
           title: "Obstoječi",
