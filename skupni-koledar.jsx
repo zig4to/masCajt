@@ -3890,27 +3890,32 @@ export default function App() {
     );
   }
 
-  function renderCommentThread(iso, eventId, kind = "plan") {
+  // `trailing` rides in the toggle's own row rather than beside the block,
+  // which would centre it against the panel once the thread is open.
+  function renderCommentThread(iso, eventId, kind = "plan", trailing = null) {
     const key = commentGroup(iso, eventId, kind);
     const comments = dayComments[key] || [];
     const open = openComments === key;
     return (
       <div style={styles.commentsBlock}>
-        <button
-          style={styles.commentsToggle}
-          onClick={() => setOpenComments(open ? null : key)}
-          aria-expanded={open}
-        >
-          <MessageSquare size={12} />
-          {comments.length > 0 ? `Komentarji (${comments.length})` : "Komentiraj"}
-          <ChevronRight
-            size={14}
-            style={{
-              transform: open ? "rotate(90deg)" : "none",
-              transition: "transform 150ms ease",
-            }}
-          />
-        </button>
+        <div style={styles.commentsHeaderRow}>
+          <button
+            style={styles.commentsToggle}
+            onClick={() => setOpenComments(open ? null : key)}
+            aria-expanded={open}
+          >
+            <MessageSquare size={12} />
+            {comments.length > 0 ? `Komentarji (${comments.length})` : "Komentiraj"}
+            <ChevronRight
+              size={14}
+              style={{
+                transform: open ? "rotate(90deg)" : "none",
+                transition: "transform 150ms ease",
+              }}
+            />
+          </button>
+          {trailing}
+        </div>
         {open && renderCommentPanel(iso, eventId, kind)}
       </div>
     );
@@ -4160,34 +4165,19 @@ export default function App() {
               {event.description && (
                 <p style={styles.eventDescription}>{event.description}</p>
               )}
-              <div style={styles.eventLinkRow}>
-                {event.link && (
-                  <a
-                    style={styles.eventLink}
-                    href={event.link}
-                    target="_blank"
-                    // noreferrer as well as noopener: the opened page has no
-                    // business knowing which calendar sent it, and anyone can
-                    // add an event here.
-                    rel="noopener noreferrer"
-                  >
-                    <Link size={12} /> Povezava
-                  </a>
-                )}
-                {/* Icon only, so it takes the corner rather than a line. The
-                    label survives as the accessible name and the tooltip --
-                    an unlabelled square is a guess otherwise. */}
+              {event.link && (
                 <a
-                  style={styles.eventLinkIcon}
-                  href={CHECKLIST_URL}
+                  style={styles.eventLink}
+                  href={event.link}
                   target="_blank"
+                  // noreferrer as well as noopener: the opened page has no
+                  // business knowing which calendar sent it, and anyone can
+                  // add an event here.
                   rel="noopener noreferrer"
-                  aria-label="Nam Puzabu"
-                  title="Nam Puzabu"
                 >
-                  <ListChecks size={14} />
+                  <Link size={12} /> Povezava
                 </a>
-              </div>
+              )}
               {/* Confirming removes this row rather than switching it to a
                   "you're going" state: once you're on the list your own chip
                   below says so, and it is also how you take it back. Two
@@ -4233,7 +4223,26 @@ export default function App() {
                   })}
                 </div>
               )}
-              {renderCommentThread(iso, event.id)}
+              {renderCommentThread(
+                iso,
+                event.id,
+                "plan",
+                /* Icon only, and beside the comment button rather than on a
+                   line of its own: it is the same link on every event and
+                   does not need a row to say so. The label survives as the
+                   accessible name and the tooltip -- an unlabelled square is
+                   a guess otherwise. */
+                <a
+                  style={styles.eventLinkIcon}
+                  href={CHECKLIST_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Nam Puzabu"
+                  title="Nam Puzabu"
+                >
+                  <ListChecks size={14} />
+                </a>
+              )}
             </div>
           );
         })}

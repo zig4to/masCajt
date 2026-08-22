@@ -1173,14 +1173,7 @@ export const styles = {
   // Only rendered when an event actually carries a link, so it can look
   // like a thing to press rather than like a field that happens to be
   // empty.
-  // The card is a column, so the link needs a row of its own to have
-  // anything sit beside it. Wrapping because two buttons and a narrow
-  // phone is a real combination.
-  eventLinkRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-  },
+
   eventLink: {
     alignSelf: "flex-start",
     display: "inline-flex",
@@ -1199,10 +1192,14 @@ export const styles = {
   // The same button with the label taken out: square, so it reads as an icon
   // rather than a text button someone forgot to fill in.
   eventLinkIcon: {
+    // Height comes from the row, not from padding: stretch makes it exactly
+    // as tall as the comment button beside it, whatever that button measures
+    // once its font has loaded. Padding sets the width only.
+    alignSelf: "stretch",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: 7,
+    padding: "0 9px",
     color: GREEN,
     background: "var(--card-bg)",
     border: `1px solid ${GREEN}`,
@@ -1551,8 +1548,15 @@ export const styles = {
   // Its own row rather than an icon tucked in the header: it is the one
   // control on the card that reveals more of the card, and it should look
   // like it does something rather than like a label.
+  commentsHeaderRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
   commentsToggle: {
-    alignSelf: "flex-start",
+    // No alignSelf: it lives in commentsHeaderRow now, whose alignItems is
+    // what lines it up with whatever sits beside it. Pinning it to flex-start
+    // left it two pixels high against the taller icon next to it.
     display: "flex",
     alignItems: "center",
     gap: 6,
