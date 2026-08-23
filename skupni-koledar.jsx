@@ -1929,6 +1929,29 @@ export default function App() {
   // Up here with the other hooks, not down beside the markup it belongs to:
   // App returns early while loading and while signed out, and a hook declared
   // past those returns runs on some renders and not others.
+  // An open event form is put away by a press anywhere outside it -- another
+  // day, the strip, the page itself. Matched by attribute rather than by a
+  // ref, because the same form is rendered from more than one place (a day
+  // card, and tomorrow's reminder copy) and one ref cannot point at whichever
+  // of them is on screen.
+  //
+  // Leaving discards the draft, which is what the cancel button does too.
+  // There is no half-saved event to keep: an event with no name cannot be
+  // written, and saving one silently on the way past would leave the day
+  // holding something nobody meant to create.
+  useEffect(() => {
+    if (!editingEvent) return;
+    function onPointerDown(e) {
+      // The delete confirmation is a sheet of its own and sits outside the
+      // form in the DOM. Answering it must not also count as leaving.
+      if (deletingEvent) return;
+      if (e.target && e.target.closest && e.target.closest("[data-event-form]")) return;
+      cancelEditingEvent();
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [editingEvent, deletingEvent]);
+
   useEffect(() => {
     if (!menuOpen) return;
     function onPointerDown(e) {
@@ -4237,7 +4260,11 @@ export default function App() {
       const eventImageInputId = `event-image-${reminder ? "jutri-" : ""}${iso}-${id || "new"}`;
       const existing = id != null ? events.find((e) => e.id === id) : null;
       return (
-        <div style={styles.eventCard(eventHues[eventKey(iso, id)])} key={id || "new"}>
+        <div
+          data-event-form=""
+          style={styles.eventCard(eventHues[eventKey(iso, id)])}
+          key={id || "new"}
+        >
           <div style={styles.eventEyebrow}>Dogodek</div>
           <input
             autoFocus={!reminder}
