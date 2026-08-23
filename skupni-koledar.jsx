@@ -1659,10 +1659,12 @@ export default function App() {
   const [archiveIsos, setArchiveIsos] = useState([]);
   // Which archived event is expanded, as "iso:eventId"; one at a time.
   const [openArchiveEvent, setOpenArchiveEvent] = useState(null);
-  // The archived event whose deletion is waiting to be confirmed, as
-  // { iso, event }; null when nothing is. Held here rather than as a flag on
-  // the card so that only one question can ever be on screen at a time.
-  const [archiveDeleting, setArchiveDeleting] = useState(null);
+  // The event whose deletion is waiting to be confirmed, as
+  // { iso, event, fromArchive }; null when nothing is. Held here rather than
+  // as a flag on the card so that only one question can ever be on screen at
+  // a time, and shared by the calendar and the archive so that both ask it
+  // the same way.
+  const [deletingEvent, setDeletingEvent] = useState(null);
   // The oldest event that exists, so the archive knows where history ends
   // rather than offering to walk backwards forever. undefined until asked,
   // null when the club has never held one; a failed probe leaves it
@@ -4085,7 +4087,7 @@ export default function App() {
           {existing && (existing.createdBy === name || isAdmin) && (
             <button
               style={styles.deleteButton}
-              onClick={() => deleteEvent(iso, id)}
+              onClick={() => setDeletingEvent({ iso, event: existing })}
             >
               <Trash2 size={12} /> Izbriši dogodek
             </button>
@@ -4389,7 +4391,9 @@ export default function App() {
                     <div style={styles.archiveCardActions}>
                       <button
                         style={styles.archiveDelete}
-                        onClick={() => setArchiveDeleting({ iso, event })}
+                        onClick={() =>
+                          setDeletingEvent({ iso, event, fromArchive: true })
+                        }
                         aria-label="Izbriši dogodek iz arhiva"
                         title="Izbriši dogodek iz arhiva"
                       >
@@ -4431,37 +4435,49 @@ export default function App() {
     </>
   );
 
-  // Asked before anything is removed, because this is the one delete in the
-  // app with nothing behind it: the event is past, so there is no re-creating
-  // it from what people answered, and its photos and comments lose the card
-  // that was showing them.
-  const archiveDeleteModal = archiveDeleting && (
-    <div style={styles.modalOverlay} onClick={() => setArchiveDeleting(null)}>
+  // Asked before any event is removed, wherever the delete was pressed.
+  // This is the one action in the app with nothing behind it: no undo, no
+  // bin to fish it back out of, the answers people gave go with it, and its
+  // comments and photos lose the card that was showing them. The question
+  // reads the date and the title back rather than asking in the abstract, so
+  // a mis-aimed tap shows up in the question itself.
+  const deletingAttendees = deletingEvent
+    ? deletingEvent.event.attendees.length
+    : 0;
+  const deleteEventModal = deletingEvent && (
+    <div style={styles.modalOverlay} onClick={() => setDeletingEvent(null)}>
       <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHeader}>
           <div>
             <div style={styles.modalEyebrow}>
-              {archiveDateLabel(archiveDeleting.iso)}
+              {archiveDateLabel(deletingEvent.iso)}
             </div>
-            <div style={styles.modalTitle}>{archiveDeleting.event.title}</div>
+            <div style={styles.modalTitle}>{deletingEvent.event.title}</div>
           </div>
         </div>
-        <p style={styles.archiveConfirmText}>
-          Res želiš izbrisati ta dogodek iz arhiva? Tega ni mogoče
-          razveljaviti.
+        <p style={styles.confirmText}>
+          {deletingEvent.fromArchive
+            ? "Res želiš izbrisati ta dogodek iz arhiva? Tega ni mogoče razveljaviti."
+            : "Res želiš izbrisati ta dogodek? Tega ni mogoče razveljaviti."}
+          {/* Only for events still to come. The archive card already lists
+              who turned up, and the number worth a second thought before
+              deleting one of those is not how many said yes weeks ago. */}
+          {!deletingEvent.fromArchive &&
+            deletingAttendees > 0 &&
+            ` Prijavljenih: ${deletingAttendees}.`}
         </p>
-        <div style={styles.archiveConfirmActions}>
+        <div style={styles.confirmActions}>
           <button
             style={styles.cancelButton}
-            onClick={() => setArchiveDeleting(null)}
+            onClick={() => setDeletingEvent(null)}
           >
             Prekliči
           </button>
           <button
-            style={styles.archiveConfirmDelete}
+            style={styles.confirmDelete}
             onClick={() => {
-              deleteEvent(archiveDeleting.iso, archiveDeleting.event.id);
-              setArchiveDeleting(null);
+              deleteEvent(deletingEvent.iso, deletingEvent.event.id);
+              setDeletingEvent(null);
             }}
           >
             <Trash2 size={13} /> Izbriši
@@ -4487,7 +4503,7 @@ export default function App() {
         {photoLightbox}
         {settingsModal}
         {photoNoticeModal}
-        {archiveDeleteModal}
+        {deleteEventModal}
       </div>
     );
   }
@@ -4811,6 +4827,7 @@ export default function App() {
         {viewPersonModal}
         {settingsModal}
         {photoNoticeModal}
+        {deleteEventModal}
       </div>
     );
   }
@@ -5159,6 +5176,7 @@ export default function App() {
       {viewPersonModal}
       {settingsModal}
       {photoNoticeModal}
+      {deleteEventModal}
     </div>
   );
 }

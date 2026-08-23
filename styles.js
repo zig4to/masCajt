@@ -1851,17 +1851,19 @@ export const styles = {
     borderRadius: 7,
     cursor: "pointer",
   },
-  archiveConfirmText: {
+  confirmText: {
     margin: "0 0 16px 0",
     fontSize: 13.5,
     lineHeight: 1.5,
     color: "var(--text-secondary)",
   },
-  archiveConfirmActions: {
+  confirmActions: {
     display: "flex",
     gap: 10,
   },
-  archiveConfirmDelete: {
+  // Cancel is the plain outline beside it and this one carries the colour:
+  // the safe answer should not be the one that has to be aimed for.
+  confirmDelete: {
     flex: 1,
     display: "flex",
     alignItems: "center",
