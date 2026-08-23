@@ -1852,6 +1852,10 @@ export default function App() {
   const [eventImageDraft, setEventImageDraft] = useState("");
   const [eventImageUploading, setEventImageUploading] = useState(false);
   const [eventChecklistDraft, setEventChecklistDraft] = useState(false);
+  // The day this event should end up on. Starts as the day it is already on,
+  // so leaving the field alone is the same as not moving it.
+  const [eventDateDraft, setEventDateDraft] = useState("");
+  const [showEventDateInput, setShowEventDateInput] = useState(false);
   // Whether the form's extra fields are unfolded. Most events are a name and
   // a time, so the things below this stay out of the way until asked for --
   // on every open, including an event that already has some of them set.
@@ -2802,6 +2806,8 @@ export default function App() {
     setShowEventLinkInput(!!existing?.link);
     setEventImageDraft(existing?.image || "");
     setEventChecklistDraft(!!existing?.checklist);
+    setEventDateDraft(iso);
+    setShowEventDateInput(false);
     // Always shut, whatever the event already carries. The form should open
     // the same way every time -- a drawer that is sometimes down and
     // sometimes not means reading it before you can use it.
@@ -2822,9 +2828,71 @@ export default function App() {
     setShowEventLinkInput(false);
     setEventImageDraft("");
     setEventChecklistDraft(false);
+    setEventDateDraft("");
+    setShowEventDateInput(false);
     setShowEventMore(false);
     setEventStartDraft("");
     setEventEndDraft("");
+  }
+
+  // Every row an event owns is addressed by the day it sits on, so moving
+  // the event means carrying its comments and its photos across with it.
+  // Left behind, they would sit on a day with no event to show them --
+  // invisible, and unreachable for good.
+  //
+  // Everything is written to the new day before anything is removed from the
+  // old one. A move interrupted half way then leaves the event on both days,
+  // which anyone can see and put right, rather than on neither.
+  //
+  // The photo files themselves do not move. Their paths were fixed when they
+  // were uploaded and are just addresses in the bucket; what the archive
+  // reads is the row, and the row is what travels.
+  async function moveEventRows(fromIso, toIso, event) {
+    const threads = ["plan", "recap"].map((kind) => ({
+      kind,
+      list: dayComments[commentGroup(fromIso, event.id, kind)] || [],
+    }));
+    const photos = dayPhotos[photoGroup(fromIso, event.id)] || [];
+
+    await window.storage.set(eventKey(toIso, event.id), encodeEvent(event), true);
+    for (const { kind, list } of threads) {
+      for (const c of list) {
+        await window.storage.set(
+          commentKey(toIso, event.id, c.id, kind),
+          encodeComment(c),
+          true
+        );
+      }
+    }
+    for (const p of photos) {
+      await window.storage.set(photoKey(toIso, event.id, p.id), encodePhoto(p), true);
+    }
+
+    await window.storage.delete(eventKey(fromIso, event.id), true);
+    for (const { kind, list } of threads) {
+      for (const c of list) {
+        await window.storage.delete(commentKey(fromIso, event.id, c.id, kind), true);
+      }
+    }
+    for (const p of photos) {
+      await window.storage.delete(photoKey(fromIso, event.id, p.id), true);
+    }
+
+    // The local copies follow, so the move shows without a reload.
+    setDayComments((prev) => {
+      const next = { ...prev };
+      for (const { kind, list } of threads) {
+        delete next[commentGroup(fromIso, event.id, kind)];
+        if (list.length) next[commentGroup(toIso, event.id, kind)] = list;
+      }
+      return next;
+    });
+    setDayPhotos((prev) => {
+      const next = { ...prev };
+      delete next[photoGroup(fromIso, event.id)];
+      if (photos.length) next[photoGroup(toIso, event.id)] = photos;
+      return next;
+    });
   }
 
   async function saveEvent(iso, id) {
@@ -2850,8 +2918,21 @@ export default function App() {
       createdBy: existing?.createdBy || name,
       attendees: existing?.attendees || [],
     };
+    // A day picked under "Več možnosti" moves the event instead of editing it
+    // where it stands. Only for one that already exists: a new event is
+    // simply created on whichever day you started from.
+    const movingTo =
+      existing && eventDateDraft && eventDateDraft !== iso ? eventDateDraft : null;
+
     setDayEvents((prev) => {
       const list = prev[iso] || [];
+      if (movingTo) {
+        return {
+          ...prev,
+          [iso]: list.filter((e) => e.id !== eventId),
+          [movingTo]: [...(prev[movingTo] || []), event],
+        };
+      }
       const next = existing
         ? list.map((e) => (e.id === eventId ? event : e))
         : [...list, event];
@@ -2859,9 +2940,14 @@ export default function App() {
     });
     setEditingEvent(null);
     try {
-      await window.storage.set(eventKey(iso, eventId), encodeEvent(event), true);
+      if (movingTo) await moveEventRows(iso, movingTo, event);
+      else await window.storage.set(eventKey(iso, eventId), encodeEvent(event), true);
     } catch (e) {
-      setError("Dogodka ni bilo mogoče shraniti. Poskusi znova.");
+      setError(
+        movingTo
+          ? "Dogodka ni bilo mogoče prestaviti. Poskusi znova."
+          : "Dogodka ni bilo mogoče shraniti. Poskusi znova."
+      );
       loadAllData();
     }
   }
@@ -4351,6 +4437,37 @@ export default function App() {
                 />
                 Checklist
               </label>
+              {/* Only for an event that exists. Choosing a day for one that
+                  does not yet would just be creating it somewhere else,
+                  which is what standing on that day and pressing add is. */}
+              {existing &&
+                (showEventDateInput ? (
+                  <div style={styles.noteBlock}>
+                    <input
+                      type="date"
+                      style={styles.input}
+                      aria-label="Nov datum dogodka"
+                      value={eventDateDraft}
+                      onChange={(e) => setEventDateDraft(e.target.value)}
+                    />
+                    <button
+                      style={styles.noteRemoveButton}
+                      onClick={() => {
+                        setEventDateDraft(iso);
+                        setShowEventDateInput(false);
+                      }}
+                    >
+                      Ne prestavljaj
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    style={styles.addNoteButton}
+                    onClick={() => setShowEventDateInput(true)}
+                  >
+                    <CalendarDays size={12} /> Prestavi datum dogodka
+                  </button>
+                ))}
               {showEventLinkInput ? (
                 <div style={styles.noteBlock}>
                   <input
