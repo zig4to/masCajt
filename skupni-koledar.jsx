@@ -4250,11 +4250,16 @@ export default function App() {
   // being created or edited. Only an event's creator can edit or delete it;
   // anyone can add another event or toggle their own attendance.
   // `reminder` marks the copy drawn under "Ne pozabi, jutri gremo". Tomorrow
-  // can be on screen twice at once -- there and inside its own day card -- and
-  // the two copies must not both claim the same DOM id or the same focus.
+  // is on screen twice at once -- there and inside its own day card -- and
+  // only one of those is a place to work from.
   function renderEventSection(iso, { reminder = false } = {}) {
     const events = dayEvents[iso] || [];
-    const isEditingHere = editingEvent && editingEvent.iso === iso;
+    // Never the reminder copy. It carries no edit button of its own, but the
+    // form is opened by the day below rather than by the card that shows it,
+    // so without this, editing tomorrow's event turned the reminder into a
+    // second form -- two of them on one screen, editing the same event, with
+    // one set of drafts between them.
+    const isEditingHere = !reminder && editingEvent && editingEvent.iso === iso;
 
     function eventForm(id) {
       const eventImageInputId = `event-image-${reminder ? "jutri-" : ""}${iso}-${id || "new"}`;
