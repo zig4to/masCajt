@@ -1659,6 +1659,10 @@ export default function App() {
   const [archiveIsos, setArchiveIsos] = useState([]);
   // Which archived event is expanded, as "iso:eventId"; one at a time.
   const [openArchiveEvent, setOpenArchiveEvent] = useState(null);
+  // The archived event whose deletion is waiting to be confirmed, as
+  // { iso, event }; null when nothing is. Held here rather than as a flag on
+  // the card so that only one question can ever be on screen at a time.
+  const [archiveDeleting, setArchiveDeleting] = useState(null);
   // The oldest event that exists, so the archive knows where history ends
   // rather than offering to walk backwards forever. undefined until asked,
   // null when the club has never held one; a failed probe leaves it
@@ -4376,6 +4380,23 @@ export default function App() {
 
                   {renderPhotoStrip(iso, event.id)}
                   {renderCommentThread(iso, event.id, "recap")}
+
+                  {/* Admin only: an archived event is everyone's memory of
+                      the evening, not just its author's, so the rule the
+                      calendar uses -- your own events are yours to delete --
+                      is the wrong one here. */}
+                  {isAdmin && (
+                    <div style={styles.archiveCardActions}>
+                      <button
+                        style={styles.archiveDelete}
+                        onClick={() => setArchiveDeleting({ iso, event })}
+                        aria-label="Izbriši dogodek iz arhiva"
+                        title="Izbriši dogodek iz arhiva"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -4410,6 +4431,46 @@ export default function App() {
     </>
   );
 
+  // Asked before anything is removed, because this is the one delete in the
+  // app with nothing behind it: the event is past, so there is no re-creating
+  // it from what people answered, and its photos and comments lose the card
+  // that was showing them.
+  const archiveDeleteModal = archiveDeleting && (
+    <div style={styles.modalOverlay} onClick={() => setArchiveDeleting(null)}>
+      <div style={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader}>
+          <div>
+            <div style={styles.modalEyebrow}>
+              {archiveDateLabel(archiveDeleting.iso)}
+            </div>
+            <div style={styles.modalTitle}>{archiveDeleting.event.title}</div>
+          </div>
+        </div>
+        <p style={styles.archiveConfirmText}>
+          Res želiš izbrisati ta dogodek iz arhiva? Tega ni mogoče
+          razveljaviti.
+        </p>
+        <div style={styles.archiveConfirmActions}>
+          <button
+            style={styles.cancelButton}
+            onClick={() => setArchiveDeleting(null)}
+          >
+            Prekliči
+          </button>
+          <button
+            style={styles.archiveConfirmDelete}
+            onClick={() => {
+              deleteEvent(archiveDeleting.iso, archiveDeleting.event.id);
+              setArchiveDeleting(null);
+            }}
+          >
+            <Trash2 size={13} /> Izbriši
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (view === "archive") {
     // The same shell the calendar uses, so the navbar sits identically on
     // both pages and the desktop width limit does not stop at the boundary
@@ -4426,6 +4487,7 @@ export default function App() {
         {photoLightbox}
         {settingsModal}
         {photoNoticeModal}
+        {archiveDeleteModal}
       </div>
     );
   }

@@ -1828,6 +1828,54 @@ export const styles = {
     gap: 10,
     padding: "0 14px 14px 14px",
   },
+  // Last thing in the open card, pushed to its far corner: everything above
+  // it is the evening itself, and the one destructive control on the page
+  // should not sit anywhere the eye lands on the way down.
+  archiveCardActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+  // Icon alone, no label: the word "Izbriši" under every recap would read as
+  // the point of the page. Small, because it is not -- but square and no
+  // smaller than this, so it stays a tap target on a phone.
+  archiveDelete: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 26,
+    height: 26,
+    padding: 0,
+    color: RED,
+    background: RED_BG,
+    border: `1px solid ${RED}`,
+    borderRadius: 7,
+    cursor: "pointer",
+  },
+  archiveConfirmText: {
+    margin: "0 0 16px 0",
+    fontSize: 13.5,
+    lineHeight: 1.5,
+    color: "var(--text-secondary)",
+  },
+  archiveConfirmActions: {
+    display: "flex",
+    gap: 10,
+  },
+  archiveConfirmDelete: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    padding: "11px",
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: "#fff",
+    background: RED,
+    border: "none",
+    borderRadius: 10,
+    cursor: "pointer",
+  },
   // Bare spans inside, spaced rather than separated: inline styles do not
   // reach children for backgrounds, but font size and colour inherit, which
   // is all these need.
