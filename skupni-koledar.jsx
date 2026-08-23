@@ -326,12 +326,23 @@ export function dayLabel(iso, today) {
   return weekdayAbbrev(iso);
 }
 
-// "ned. 12.2" -- short weekday + day.month, no leading zeros. Used on the
-// recent-events cards where the day-list's own "Danes"/"Jutri" framing
-// (dayLabel) would be ambiguous once cards from several different days sit
-// side by side.
-export function shortDateLabel(iso) {
-  return `${weekdayAbbrev(iso)}. ${dayNumber(iso)}.${monthNumber(iso)}`;
+// "ned. 12.2" -- short weekday + day.month, no leading zeros. The two days
+// that have a name are given it in place of the weekday: "Danes 12.2" says
+// at a glance what "ned. 12.2" makes you work out, and keeping the numbers
+// means a card still answers "which day is that" without being tapped.
+//
+// No full stop after Danes and Jutri, unlike the weekday beside them: those
+// are abbreviations and these are words.
+//
+// `today` is optional: without it every day gets its weekday, which is what
+// a caller with no notion of today wants.
+export function shortDateLabel(iso, today) {
+  const date = `${dayNumber(iso)}.${monthNumber(iso)}`;
+  if (today) {
+    if (iso === today) return `Danes ${date}`;
+    if (iso === addDays(today, 1)) return `Jutri ${date}`;
+  }
+  return `${weekdayAbbrev(iso)}. ${date}`;
 }
 
 export function initials(name) {
@@ -1426,7 +1437,7 @@ function PersonChip({ name, color, style, self }) {
   );
 }
 
-function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
+function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
   const count = events.length;
   const canSlide = count > CARDS_IN_VIEW;
   const base = canSlide ? CARDS_IN_VIEW : 0;
@@ -1611,7 +1622,9 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
                 }}
               >
                 <div style={styles.recentEventTitle(Boolean(ev.keyword))}>{ev.title}</div>
-                <div style={styles.recentEventDate}>{shortDateLabel(ev._iso)}</div>
+                <div style={styles.recentEventDate}>
+                  {shortDateLabel(ev._iso, today)}
+                </div>
                 {ev.duration && (
                   <div style={styles.recentEventTime}>{splitDuration(ev.duration).start}</div>
                 )}
@@ -3607,6 +3620,7 @@ export default function App() {
       events={recentEvents}
       eventHues={eventHues}
       onSelectDay={openEventDay}
+      today={today}
     />
   );
 
