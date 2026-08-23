@@ -1138,6 +1138,28 @@ function archiveSlabLower(upper) {
 // grows past the point where anybody reads it.
 const CHANGELOG = [
   {
+    date: "2026-08-24",
+    items: [
+      "Dogodek se da prestaviti na drug dan; komentarji in slike gredo z njim",
+      "V traku Aktualni dogodki piše Danes in Jutri, poleg datuma",
+      "Kartica dogodka, ki je danes, rahlo utripa",
+      "Dogodek pod «Ne pozabi, jutri gremo» se ureja samo v svojem dnevu",
+    ],
+  },
+  {
+    date: "2026-08-23",
+    items: [
+      "Pred brisanjem dogodka te program vpraša, ali res želiš",
+      "Trak Aktualni dogodki drsi zvezno, namesto da bi poskakoval",
+      "Arhiv je urejen po mesecih; vsak mesec ima lahko svojo sliko",
+      "Pretekli dogodek ima naslovno sliko, izbrano med slikami tistega večera",
+      "Gumb Več možnosti v obrazcu za dogodek: slika, povezava in ključna beseda so zdaj tam",
+      "Checkliste se pokaže samo pri dogodkih, kjer jo vklopiš",
+      "Obrazec za urejanje se zapre, če pritisneš kam drugam",
+      "Do arhiva se pride tudi z gumba na dnu domače strani",
+    ],
+  },
+  {
     date: "2026-08-22",
     items: [
       "Arhiv preteklih dogodkov, z ločenim prostorom za komentarje po dogodku",
