@@ -1853,7 +1853,8 @@ export default function App() {
   const [eventImageUploading, setEventImageUploading] = useState(false);
   const [eventChecklistDraft, setEventChecklistDraft] = useState(false);
   // Whether the form's extra fields are unfolded. Most events are a name and
-  // a time, so the things below this stay out of the way until asked for.
+  // a time, so the things below this stay out of the way until asked for --
+  // on every open, including an event that already has some of them set.
   const [showEventMore, setShowEventMore] = useState(false);
   const [eventStartDraft, setEventStartDraft] = useState("");
   const [eventEndDraft, setEventEndDraft] = useState("");
@@ -2778,11 +2779,10 @@ export default function App() {
     setShowEventLinkInput(!!existing?.link);
     setEventImageDraft(existing?.image || "");
     setEventChecklistDraft(!!existing?.checklist);
-    // Unfolded from the start when the event already carries something down
-    // there, so editing never hides what the event has.
-    setShowEventMore(
-      !!(existing?.image || existing?.link || existing?.keyword || existing?.checklist)
-    );
+    // Always shut, whatever the event already carries. The form should open
+    // the same way every time -- a drawer that is sometimes down and
+    // sometimes not means reading it before you can use it.
+    setShowEventMore(false);
     const { start, end } = splitDuration(existing?.duration || "");
     setEventStartDraft(start);
     setEventEndDraft(end);
