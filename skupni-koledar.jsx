@@ -506,6 +506,10 @@ export function decodeEvent(raw, id) {
       keyword: parsed.keyword || "",
       link: parsed.link || "",
       image: parsed.image || "",
+      // Off unless the event says otherwise, events saved before this
+      // existed included: the button used to be on every event, and the
+      // point of making it a setting was that it should not be.
+      checklist: parsed.checklist === true,
       duration: parsed.duration || "",
       createdBy: parsed.createdBy || "",
       attendees: Array.isArray(parsed.attendees) ? parsed.attendees : [],
@@ -1165,9 +1169,9 @@ const DRIFT_START_DELAY_MS = 5000;
 // up everywhere below instead of a plain 0.
 // How long a tapped chip keeps its name up. Long enough to read, short
 // enough that you do not have to dismiss it.
-// The packing list, which lives in its own little app. Every event gets the
-// button, with no per-event setting: what you forget is the same whatever
-// the outing is.
+// The packing list, which lives in its own little app. Which events show the
+// button is a per-event setting under "Več možnosti": what you forget is the
+// same whatever the outing is, but most outings need nothing packed at all.
 const CHECKLIST_URL = "https://zig4to.github.io/Checkliste/";
 
 const NAME_POPUP_MS = 3000;
@@ -1847,6 +1851,10 @@ export default function App() {
   const [showEventLinkInput, setShowEventLinkInput] = useState(false);
   const [eventImageDraft, setEventImageDraft] = useState("");
   const [eventImageUploading, setEventImageUploading] = useState(false);
+  const [eventChecklistDraft, setEventChecklistDraft] = useState(false);
+  // Whether the form's extra fields are unfolded. Most events are a name and
+  // a time, so the things below this stay out of the way until asked for.
+  const [showEventMore, setShowEventMore] = useState(false);
   const [eventStartDraft, setEventStartDraft] = useState("");
   const [eventEndDraft, setEventEndDraft] = useState("");
   // Attendee chips currently playing an animation: chip id -> "in" | "out".
@@ -2769,6 +2777,12 @@ export default function App() {
     setEventLinkDraft(existing?.link || "");
     setShowEventLinkInput(!!existing?.link);
     setEventImageDraft(existing?.image || "");
+    setEventChecklistDraft(!!existing?.checklist);
+    // Unfolded from the start when the event already carries something down
+    // there, so editing never hides what the event has.
+    setShowEventMore(
+      !!(existing?.image || existing?.link || existing?.keyword || existing?.checklist)
+    );
     const { start, end } = splitDuration(existing?.duration || "");
     setEventStartDraft(start);
     setEventEndDraft(end);
@@ -2784,6 +2798,8 @@ export default function App() {
     setEventLinkDraft("");
     setShowEventLinkInput(false);
     setEventImageDraft("");
+    setEventChecklistDraft(false);
+    setShowEventMore(false);
     setEventStartDraft("");
     setEventEndDraft("");
   }
@@ -2806,6 +2822,7 @@ export default function App() {
       // usable http(s) address or nothing at all.
       link: safeEventLink(eventLinkDraft),
       image: eventImageDraft,
+      checklist: eventChecklistDraft,
       duration,
       createdBy: existing?.createdBy || name,
       attendees: existing?.attendees || [],
@@ -4273,80 +4290,113 @@ export default function App() {
               <MessageSquare size={12} /> Dodaj opis
             </button>
           )}
-          {showEventLinkInput ? (
-            <div style={styles.noteBlock}>
+          {/* Name, time and description are what almost every event is;
+              the rest is occasional, and four more controls stacked under
+              them made the common case look like a long form. */}
+          <button
+            style={styles.addNoteButton}
+            onClick={() => setShowEventMore((open) => !open)}
+            aria-expanded={showEventMore}
+          >
+            <Settings size={12} /> Več možnosti
+            <ChevronRight
+              size={13}
+              style={{
+                marginLeft: 2,
+                transform: showEventMore ? "rotate(90deg)" : "none",
+                transition: "transform 150ms ease",
+              }}
+            />
+          </button>
+          {showEventMore && (
+            <div style={styles.eventMorePanel}>
+              <label style={styles.eventCheckRow}>
+                <input
+                  type="checkbox"
+                  style={styles.eventCheckbox}
+                  checked={eventChecklistDraft}
+                  onChange={(e) => setEventChecklistDraft(e.target.checked)}
+                />
+                Checklist
+              </label>
+              {showEventLinkInput ? (
+                <div style={styles.noteBlock}>
+                  <input
+                    style={styles.input}
+                    type="url"
+                    inputMode="url"
+                    placeholder="Povezava (https://…)"
+                    value={eventLinkDraft}
+                    onChange={(e) => setEventLinkDraft(e.target.value)}
+                  />
+                  <button
+                    style={styles.noteRemoveButton}
+                    onClick={() => {
+                      setEventLinkDraft("");
+                      setShowEventLinkInput(false);
+                    }}
+                  >
+                    Odstrani povezavo
+                  </button>
+                </div>
+              ) : (
+                <button
+                  style={styles.addNoteButton}
+                  onClick={() => setShowEventLinkInput(true)}
+                >
+                  <Link size={12} /> Dodaj povezavo
+                </button>
+              )}
+              {eventImageDraft ? (
+                <div style={styles.eventImageRow}>
+                  <img
+                    src={eventImageUrl(eventImageDraft)}
+                    alt=""
+                    style={styles.eventImagePreview}
+                  />
+                  <button
+                    style={styles.noteRemoveButton}
+                    onClick={() => setEventImageDraft("")}
+                  >
+                    Odstrani sliko
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* A button rather than a label, so the picker only opens
+                      from the press and nothing else can trip it. */}
+                  <button
+                    style={styles.addNoteButton}
+                    disabled={eventImageUploading}
+                    onClick={() =>
+                      document.getElementById(eventImageInputId)?.click()
+                    }
+                  >
+                    <Plus size={12} />{" "}
+                    {eventImageUploading ? "Nalagam …" : "Dodaj sliko"}
+                  </button>
+                  <input
+                    id={eventImageInputId}
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      uploadEventImage(iso, e.target.files);
+                      // Cleared so picking the same file twice in a row
+                      // still fires a change event the second time.
+                      e.target.value = "";
+                    }}
+                  />
+                </>
+              )}
               <input
                 style={styles.input}
-                type="url"
-                inputMode="url"
-                placeholder="Povezava (https://…)"
-                value={eventLinkDraft}
-                onChange={(e) => setEventLinkDraft(e.target.value)}
+                placeholder="Ključna beseda"
+                value={eventKeywordDraft}
+                onChange={(e) => setEventKeywordDraft(e.target.value)}
               />
-              <button
-                style={styles.noteRemoveButton}
-                onClick={() => {
-                  setEventLinkDraft("");
-                  setShowEventLinkInput(false);
-                }}
-              >
-                Odstrani povezavo
-              </button>
             </div>
-          ) : (
-            <button
-              style={styles.addNoteButton}
-              onClick={() => setShowEventLinkInput(true)}
-            >
-              <Link size={12} /> Dodaj povezavo
-            </button>
           )}
-          {eventImageDraft ? (
-            <div style={styles.eventImageRow}>
-              <img
-                src={eventImageUrl(eventImageDraft)}
-                alt=""
-                style={styles.eventImagePreview}
-              />
-              <button
-                style={styles.noteRemoveButton}
-                onClick={() => setEventImageDraft("")}
-              >
-                Odstrani sliko
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* A button rather than a label, so the picker only opens from
-                  the press and nothing else can trip it. */}
-              <button
-                style={styles.addNoteButton}
-                disabled={eventImageUploading}
-                onClick={() => document.getElementById(eventImageInputId)?.click()}
-              >
-                <Plus size={12} />{" "}
-                {eventImageUploading ? "Nalagam …" : "Dodaj sliko"}
-              </button>
-              <input
-                id={eventImageInputId}
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  uploadEventImage(iso, e.target.files);
-                  // Cleared so picking the same file twice in a row still
-                  // fires a change event the second time.
-                  e.target.value = "";
-                }}
-              />
-            </>
-          )}
-          <input
-            style={styles.input}
-            placeholder="Ključna beseda"
-            value={eventKeywordDraft}
-            onChange={(e) => setEventKeywordDraft(e.target.value)}
-          />
           <div style={styles.editActionsRow}>
             <button style={styles.cancelButton} onClick={cancelEditingEvent}>
               Prekliči
@@ -4514,21 +4564,24 @@ export default function App() {
                 iso,
                 event.id,
                 "plan",
-                /* Icon only, and beside the comment button rather than on a
-                   line of its own: it is the same link on every event and
-                   does not need a row to say so. The label survives as the
-                   accessible name and the tooltip -- an unlabelled square is
-                   a guess otherwise. */
-                <a
-                  style={styles.eventLinkIcon}
-                  href={CHECKLIST_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Nam Puzabu"
-                  title="Nam Puzabu"
-                >
-                  <ListChecks size={14} />
-                </a>
+                /* Icon only, and beside the comment button rather than on
+                   a line of its own: it does not need a row to say so. The
+                   label survives as the accessible name and the tooltip --
+                   an unlabelled square is a guess otherwise. Only on the
+                   events that asked for it: a packing list means something
+                   before a weekend away and nothing before a drink in town. */
+                event.checklist ? (
+                  <a
+                    style={styles.eventLinkIcon}
+                    href={CHECKLIST_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Nam Puzabu"
+                    title="Nam Puzabu"
+                  >
+                    <ListChecks size={14} />
+                  </a>
+                ) : null
               )}
             </div>
           );

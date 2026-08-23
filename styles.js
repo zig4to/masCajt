@@ -1217,6 +1217,37 @@ export const styles = {
   // object-fit: cover with the position pinned right means a photo of any
   // shape fills the wedge and is cropped rather than squashed, and never
   // reaches past it.
+  // The extra fields, once the row above has been opened. Ruled off and
+  // inset, so the form reads as a short one with a drawer rather than as a
+  // long one that happens to be folded.
+  eventMorePanel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    paddingLeft: 10,
+    borderLeft: "2px solid var(--divider)",
+  },
+  // A real <label> wrapping a real checkbox: the whole row is then the hit
+  // target, which is what a thumb needs, and the browser gives the pairing
+  // to a screen reader without any aria of ours.
+  eventCheckRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--text-strong)",
+    cursor: "pointer",
+    padding: "2px 0",
+  },
+  eventCheckbox: {
+    width: 16,
+    height: 16,
+    margin: 0,
+    accentColor: GREEN,
+    cursor: "pointer",
+    flexShrink: 0,
+  },
   eventImageRow: {
     display: "flex",
     alignItems: "center",
