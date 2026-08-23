@@ -152,6 +152,25 @@ const THEME_CSS = `
       100% { opacity: 0; }
     }
   }
+  /* Tonight's card on the event strip, breathing. Small enough to be caught
+     at the edge of the eye rather than to pull it: the strip is something
+     you glance at on the way past, and a card that insisted would be worse
+     than one that sat still. Here because @keyframes cannot be written as an
+     inline style.
+
+     The scale stays inside the viewport's 4px top padding, so the card grows
+     without being clipped by the strip's own overflow. */
+  @keyframes todayPulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.04); }
+  }
+  /* Asked for less motion: the card keeps its place and simply stops
+     breathing. Nothing is lost by that -- it already says "Danes". */
+  @media (prefers-reduced-motion: reduce) {
+    @keyframes todayPulse {
+      0%, 100% { transform: none; }
+    }
+  }
   /* The loader: a green bar that runs the length of its track and starts
      again. Indeterminate on purpose -- the window query has no progress to
      report, so a bar that filled would be inventing one. It lives here
@@ -1167,7 +1186,7 @@ const DRIFT_CARDS_PER_SEC = 0.12;
 
 // How long the strip holds still before it starts, counted from the moment
 // there is something on it to read.
-const DRIFT_START_DELAY_MS = 5000;
+const DRIFT_START_DELAY_MS = 7000;
 
 // "Aktualni dogodki" strip: shows 3 cards, advances one card-width every 6s,
 // and can also be dragged by mouse or finger. Both directions wrap seamlessly,
@@ -1615,7 +1634,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
               {seamAfter && <div style={styles.recentEventsSeam} />}
               <button
                 type="button"
-                style={styles.recentEventCard(hue, dragging)}
+                style={styles.recentEventCard(hue, dragging, ev._iso === today)}
                 onClick={() => {
                   if (performance.now() - dragEndedAtRef.current < 150) return;
                   onSelectDay?.(ev._iso);

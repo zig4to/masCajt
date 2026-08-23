@@ -663,7 +663,7 @@ export const styles = {
   // Rendered as a <button> (it opens the event's day), so it carries the
   // usual button resets: without them the card would pick up the UA's font
   // and centre its text.
-  recentEventCard: (hue, dragging) => ({
+  recentEventCard: (hue, dragging, isToday) => ({
     font: "inherit",
     color: "inherit",
     textAlign: "left",
@@ -684,6 +684,10 @@ export const styles = {
     border: `1px solid rgba(${hue}, 0.32)`,
     boxShadow: `0 8px 18px -9px rgba(${hue}, 0.28), 0 1px 4px rgba(20, 30, 25, 0.05)`,
     overflow: "hidden",
+    // Tonight's card breathes, so the one event that cannot wait is the one
+    // the eye lands on. The keyframes are in THEME_CSS, which is also where
+    // the reduced-motion version of them lives.
+    animation: isToday ? "todayPulse 2.6s ease-in-out infinite" : "none",
   }),
   // The card is a fixed square, so its vertical budget is fixed too. A card
   // that also shows a keyword has one more row to fit, and a title wrapping
