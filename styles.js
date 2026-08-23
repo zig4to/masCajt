@@ -640,11 +640,26 @@ export const styles = {
     width: `${(extendedCount / 3) * 100}%`,
     willChange: "transform",
   }),
-  recentEventSlot: (percent) => ({
+  // 5px each side makes the usual 10px gutter between two cards. The loop's
+  // seam gets more, so the join reads as a break rather than as one more gap
+  // in the run -- and the extra goes on both sides of it, which is what keeps
+  // the rule down the middle of it.
+  //
+  // The slots stay the same width whatever their padding, because the width
+  // is a flex basis and the box is border-box: the two cards either side of
+  // the seam give up the space, rather than the strip growing. That also
+  // keeps every slot worth exactly one unit of the drift's offset.
+  //
+  // Which is why the extra is 3px a side and not more. The cards are square,
+  // so whatever a card gives up in width it also loses in height, and past
+  // about this much the two beside the seam visibly sit shorter than the
+  // rest of the run.
+  recentEventSlot: (percent, seamBefore, seamAfter) => ({
     flex: `0 0 ${percent}%`,
     minWidth: 0,
     boxSizing: "border-box",
-    padding: "0 5px",
+    paddingLeft: seamBefore ? 8 : 5,
+    paddingRight: seamAfter ? 8 : 5,
     position: "relative", // anchors recentEventsSeam to this card's gutter
   }),
   // Marks where the loop comes back around: a 1px rule in the 10px gutter

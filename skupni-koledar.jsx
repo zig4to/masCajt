@@ -1630,7 +1630,18 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
       >
         <div ref={trackRef} style={styles.recentEventsTrack(extended.length)}>
           {extended.map(({ ev, hue, seamAfter }, i) => (
-            <div key={`${ev.id}-${i}`} style={styles.recentEventSlot(slotPercent)}>
+            <div
+              key={`${ev.id}-${i}`}
+              style={styles.recentEventSlot(
+                slotPercent,
+                // The slot after the seam widens to match the one before it.
+                // Read off the neighbour rather than flagged on the card,
+                // because a card's place in the loop is what decides this and
+                // the same card appears in it more than once.
+                i > 0 && extended[i - 1].seamAfter,
+                seamAfter
+              )}
+            >
               {seamAfter && <div style={styles.recentEventsSeam} />}
               <button
                 type="button"
