@@ -232,6 +232,45 @@ export function weekdayAbbrev(iso) {
   return WEEKDAY_NAMES[utcFromIso(iso).getUTCDay()];
 }
 
+// Capitalised because these are card titles rather than words in a sentence,
+// which is the one place Slovenian writes a month with a capital.
+const MONTH_NAMES_SL = [
+  "Januar",
+  "Februar",
+  "Marec",
+  "April",
+  "Maj",
+  "Junij",
+  "Julij",
+  "Avgust",
+  "September",
+  "Oktober",
+  "November",
+  "December",
+];
+
+// "2026-08". The archive groups by this, and it is also what addresses a
+// month's picture, so it has a name rather than a slice() at each use.
+export function monthOf(iso) {
+  return iso.slice(0, 7);
+}
+
+export function monthLabel(month) {
+  const name = MONTH_NAMES_SL[Number(month.slice(5, 7)) - 1];
+  return name ? `${name} ${month.slice(0, 4)}` : month;
+}
+
+// The month before this one, as a first-of-month date. Written out rather
+// than done with a Date: the archive walks backwards past January, and a
+// month arithmetic bug there would silently skip a year of history.
+export function prevMonthStart(month) {
+  const year = Number(month.slice(0, 4));
+  const m = Number(month.slice(5, 7));
+  const py = m === 1 ? year - 1 : year;
+  const pm = m === 1 ? 12 : m - 1;
+  return `${py}-${String(pm).padStart(2, "0")}-01`;
+}
+
 // Scroll target for a day, shared by the mobile accordion card and the
 // desktop detail panel so one lookup works in either layout.
 export function dayAnchorId(iso) {
@@ -556,6 +595,29 @@ export function sortComments(list) {
 // adding one is an insert rather than a read-modify-write of the event -- but
 // the row holds only a path. The file itself lives in Supabase Storage, for
 // the reason spelled out beside window.photos in index.html.
+// A month's own picture for the archive. It lives on the first of the month
+// under a marker of its own, rather than under a prefix of its own, because
+// the database only lets this app write keys beginning "avail:" -- see the
+// row-level security policies in supabase-schema.sql.
+const MONTH_MARKER = "__month__";
+
+export function monthCoverKey(month) {
+  return `avail:${month}-01:${MONTH_MARKER}`;
+}
+
+export function encodeMonthCover(image) {
+  return JSON.stringify({ image });
+}
+
+export function decodeMonthCover(raw) {
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed.image === "string" ? parsed.image : "";
+  } catch (e) {
+    return "";
+  }
+}
+
 const PHOTO_MARKER = "__photo__";
 
 export function photoKey(iso, eventId, photoId) {
@@ -1013,10 +1075,18 @@ const CARDS_IN_VIEW = 3;
 // one tap away inside the day.
 const DAY_CHIPS_SHOWN = 2;
 
-// How far back one press of "Naloži več" reaches. A bounded slab rather than
-// the whole history: the archive only grows, and a query with no lower bound
-// would eventually read every row the club has ever written.
-const ARCHIVE_SLAB_DAYS = 30;
+// How far back one press of "Naloži starejše" reaches: one calendar month,
+// not a rolling count of days. A bounded slab rather than the whole history,
+// because the archive only grows and a query with no lower bound would
+// eventually read every row the club has ever written -- and aligned to the
+// month because that is what the archive is now a list of. A slab that
+// stopped mid-month would hand a month card half its evenings, and could
+// miss the row holding that month's own picture, which sits on the first.
+function archiveSlabLower(upper) {
+  return upper.endsWith("-01")
+    ? prevMonthStart(monthOf(upper))
+    : `${monthOf(upper)}-01`;
+}
 
 // Days the home list shows before it stops. The window behind it is still
 // the full fourteen -- this only decides how much of it is on screen, so
@@ -1675,8 +1745,9 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   // "calendar" | "archive". Two pages, so a string rather than a router.
   const [view, setView] = useState("calendar");
-  // Oldest date the archive has reached. The next slab runs from
-  // ARCHIVE_SLAB_DAYS before it up to it; null means nothing loaded yet.
+  // Oldest date the archive has reached, always the first of a month once
+  // anything is loaded. The next slab is the month before it; null means
+  // nothing loaded yet.
   const [archiveFrom, setArchiveFrom] = useState(null);
   // Past days holding at least one event, newest first. Their events and
   // threads live in dayEvents/dayComments alongside the visible window, so
@@ -1684,6 +1755,15 @@ export default function App() {
   const [archiveIsos, setArchiveIsos] = useState([]);
   // Which archived event is expanded, as "iso:eventId"; one at a time.
   const [openArchiveEvent, setOpenArchiveEvent] = useState(null);
+  // Which archived month is expanded, as "2026-08"; one at a time, the same
+  // rule the cards inside it follow.
+  const [openArchiveMonth, setOpenArchiveMonth] = useState(null);
+  // Each month's picture, as { "2026-08": "path/in/the/bucket.jpg" }. Kept
+  // apart from dayEvents because a month is not a day and can carry a picture
+  // in a stretch where nothing happened at all.
+  const [monthCovers, setMonthCovers] = useState({});
+  // The month whose picture is uploading, "" when none is.
+  const [monthCoverUploading, setMonthCoverUploading] = useState("");
   // The event whose deletion is waiting to be confirmed, as
   // { iso, event, fromArchive }; null when nothing is. Held here rather than
   // as a flag on the card so that only one question can ever be on screen at
@@ -1896,6 +1976,7 @@ export default function App() {
       const events = {};
       const comments = {};
       const photos = {};
+      const covers = {};
       for (const iso of days) {
         result[iso] = {};
         events[iso] = [];
@@ -1926,6 +2007,13 @@ export default function App() {
           const id = person.slice(EVENT_MARKER.length);
           const ev = decodeEvent(row.value, id);
           if (ev) events[iso].push(ev);
+          continue;
+        }
+        // Ahead of the fall-through, which reads anything left as somebody's
+        // availability: without this a month's picture would enter the
+        // calendar as a person called "__month__".
+        if (person === MONTH_MARKER) {
+          covers[monthOf(iso)] = decodeMonthCover(row.value);
           continue;
         }
         result[iso][person] = decodeEntry(row.value);
@@ -1984,6 +2072,7 @@ export default function App() {
         }
         return { ...kept, ...photos };
       });
+      setMonthCovers((prev) => ({ ...prev, ...covers }));
       setError(null);
     } catch (e) {
       setError("Podatkov ni bilo mogoče naložiti. Poskusi znova.");
@@ -2010,6 +2099,7 @@ export default function App() {
       const events = {};
       const comments = {};
       const photos = {};
+      const covers = {};
       // Exclusive, and set past today rather than at it: an outing is over
       // hours before the day is, and waiting until midnight to open the
       // archive meant nobody could put their photos up on the evening they
@@ -2026,7 +2116,7 @@ export default function App() {
       // stretch of months would otherwise cost one press each, every one of
       // them adding nothing to the list.
       for (;;) {
-        const lower = addDays(upper, -ARCHIVE_SLAB_DAYS);
+        const lower = archiveSlabLower(upper);
         const res = await window.storage.range(`avail:${lower}`, `avail:${upper}`, true);
         for (const row of (res && res.rows) || []) {
           const iso = isoFromKey(row.key);
@@ -2049,6 +2139,8 @@ export default function App() {
           } else if (person.startsWith(EVENT_MARKER)) {
             const ev = decodeEvent(row.value, person.slice(EVENT_MARKER.length));
             if (ev) (events[iso] = events[iso] || []).push(ev);
+          } else if (person === MONTH_MARKER) {
+            covers[monthOf(iso)] = decodeMonthCover(row.value);
           }
         }
         upper = lower;
@@ -2070,6 +2162,7 @@ export default function App() {
       setDayEvents((prev) => ({ ...prev, ...events }));
       setDayComments((prev) => ({ ...prev, ...comments }));
       setDayPhotos((prev) => ({ ...prev, ...photos }));
+      setMonthCovers((prev) => ({ ...prev, ...covers }));
       setArchiveIsos((prev) =>
         [...new Set([...prev, ...Object.keys(events)])].sort().reverse()
       );
@@ -2144,6 +2237,19 @@ export default function App() {
         onChange: ({ type, key, value }) => {
           const iso = isoFromKey(key);
           const person = personFromKey(key);
+
+          // Ahead of the window check below, because a month is not a day:
+          // its picture belongs in the map whether or not anyone here has
+          // loaded the week it happens to sit in.
+          if (iso && person === MONTH_MARKER) {
+            const month = monthOf(iso);
+            setMonthCovers((prev) => ({
+              ...prev,
+              [month]: type === "DELETE" ? "" : decodeMonthCover(value),
+            }));
+            return;
+          }
+
           // Past days count too, once the archive has loaded them: a comment
           // written under last week's outing has to reach whoever else is
           // reading it, exactly as one written under today does.
@@ -2781,6 +2887,29 @@ export default function App() {
     }
   }
 
+  // A month's picture, uploaded the way an event's is -- same bucket, a
+  // folder of its own -- but written straight to its row rather than into a
+  // draft, because a month has no form to save. Offered to the admin alone:
+  // a month belongs to the club rather than to whoever happened to be out
+  // that week, which is the same reasoning the archive's delete follows.
+  async function uploadMonthCover(month, fileList) {
+    const file = Array.from(fileList || []).find((f) => f.type.startsWith("image/"));
+    if (!file || !window.photos) return;
+    setMonthCoverUploading(month);
+    try {
+      const { blob } = await downscaleImage(file);
+      const path = `meseci/${month}/${Date.now()}.jpg`;
+      await window.photos.upload(path, blob);
+      setMonthCovers((prev) => ({ ...prev, [month]: path }));
+      await window.storage.set(monthCoverKey(month), encodeMonthCover(path), true);
+    } catch (e) {
+      console.error("month cover upload failed:", e);
+      setArchiveError("Slike meseca ni bilo mogoče naložiti. Poskusi znova.");
+    } finally {
+      setMonthCoverUploading("");
+    }
+  }
+
   async function uploadPhotos(iso, eventId, fileList) {
     const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
     if (!files.length || !name || !window.photos) return;
@@ -3230,12 +3359,26 @@ export default function App() {
   }
   const recentEvents = eventsNearestFirst(upcomingEvents);
 
-  // Everything the archive has loaded, newest day first. archiveIsos is
-  // already sorted that way; within a day the events keep their creation
-  // order, which is the order they had on the day itself.
-  const archiveEntries = archiveIsos.flatMap((iso) =>
-    (dayEvents[iso] || []).map((event) => ({ iso, event }))
-  );
+  // Everything the archive has loaded, gathered into the months it belongs
+  // to, newest month first. archiveIsos is already sorted newest-first, so
+  // walking it in order puts both the months and the days inside them in the
+  // order the archive wants without a second sort; within a day the events
+  // keep their creation order, which is the order they had on the day itself.
+  const archiveMonths = [];
+  for (const iso of archiveIsos) {
+    const month = monthOf(iso);
+    let group = archiveMonths[archiveMonths.length - 1];
+    if (!group || group.month !== month) {
+      group = { month, entries: [] };
+      archiveMonths.push(group);
+    }
+    for (const event of dayEvents[iso] || []) {
+      group.entries.push({ iso, event });
+    }
+  }
+  // The same list flat, for the colour assignment and the empty state, which
+  // both want events rather than months.
+  const archiveEntries = archiveMonths.flatMap((group) => group.entries);
 
   // One color per event, assigned across the whole list and then looked up by
   // storage key, so an event's card in the strip and its card inside the day
@@ -4349,6 +4492,130 @@ export default function App() {
     oldestEventIso !== undefined &&
     (archiveFloor === null || (!!archiveFrom && archiveFrom <= archiveFloor));
 
+  // One archived evening. Lifted out of the list because the list is a
+  // list of months now and these hang inside one, and a card nested two
+  // callbacks deep is a card nobody can find again.
+  function renderArchiveEventCard(iso, event) {
+    const cardKey = `${iso}:${event.id}`;
+    const open = openArchiveEvent === cardKey;
+    const comments = dayComments[commentGroup(iso, event.id, "recap")] || [];
+    const going = event.attendees.length;
+    return (
+      <div key={cardKey} style={styles.archiveCard(eventHues[eventKey(iso, event.id)])}>
+        {/* Shut only. Open, the card *is* the evening -- the photos,
+            who came, what was said -- and a washed-out copy of one of
+            those photos behind all of it competes with the thing it
+            was standing in for. The same wedge the calendar's cards
+            use, so an event does not change shape on its way here. */}
+        {!open && event.image && (
+          <img
+            src={eventImageUrl(event.image)}
+            alt=""
+            loading="lazy"
+            style={styles.eventCardImage}
+          />
+        )}
+        <button
+          style={styles.archiveCardHead}
+          onClick={() => setOpenArchiveEvent(open ? null : cardKey)}
+          aria-expanded={open}
+        >
+          <div style={styles.archiveCardMain}>
+            <div style={styles.archiveCardDate}>{archiveDateLabel(iso)}</div>
+            <div style={styles.archiveCardTitle}>{event.title}</div>
+          </div>
+          <ChevronRight
+            size={18}
+            color="var(--text-faint)"
+            style={{
+              flexShrink: 0,
+              transform: open ? "rotate(90deg)" : "none",
+              transition: "transform 150ms ease",
+            }}
+          />
+        </button>
+
+        {open && (
+          <div style={styles.archiveCardBody}>
+            <div style={styles.archiveSummary}>
+              {event.duration && <span>{event.duration}</span>}
+              <span>
+                {going}{" "}
+                {pluralSl(going, [
+                  "udeleženec",
+                  "udeleženca",
+                  "udeleženci",
+                  "udeležencev",
+                ])}
+              </span>
+              <span>
+                {comments.length}{" "}
+                {pluralSl(comments.length, [
+                  "komentar",
+                  "komentarja",
+                  "komentarji",
+                  "komentarjev",
+                ])}
+              </span>
+            </div>
+
+            {event.description && (
+              <p style={styles.eventDescription}>{event.description}</p>
+            )}
+            {event.link && (
+              <a
+                style={styles.eventLink}
+                href={event.link}
+                target="_blank"
+                // noreferrer as well as noopener: the opened page has no business
+                // knowing which calendar sent it, and anyone can add an event here.
+                rel="noopener noreferrer"
+              >
+                <Link size={12} /> Povezava
+              </a>
+            )}
+
+            {event.attendees.length > 0 && (
+              <div style={styles.eventAttendees}>
+                <span style={styles.attendeesLabel}>Prišli:</span>
+                {event.attendees.map((n) => (
+                  <PersonChip
+                    key={n}
+                    name={n}
+                    color={personColors[n] || GREEN}
+                    self={n === name}
+                  />
+                ))}
+              </div>
+            )}
+
+            {renderPhotoStrip(iso, event.id)}
+            {renderCommentThread(iso, event.id, "recap")}
+
+            {/* Admin only: an archived event is everyone's memory of
+                the evening, not just its author's, so the rule the
+                calendar uses -- your own events are yours to delete --
+                is the wrong one here. */}
+            {isAdmin && (
+              <div style={styles.archiveCardActions}>
+                <button
+                  style={styles.archiveDelete}
+                  onClick={() =>
+                    setDeletingEvent({ iso, event, fromArchive: true })
+                  }
+                  aria-label="Izbriši dogodek iz arhiva"
+                  title="Izbriši dogodek iz arhiva"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const archivePage = (
     <>
       <div style={styles.archiveIntro}>
@@ -4367,21 +4634,19 @@ export default function App() {
             {archiveFrom ? "V tem obdobju ni bilo dogodkov." : "Nalagam …"}
           </div>
         )}
-        {archiveEntries.map(({ iso, event }) => {
-          const cardKey = `${iso}:${event.id}`;
-          const open = openArchiveEvent === cardKey;
-          const comments = dayComments[commentGroup(iso, event.id, "recap")] || [];
-          const going = event.attendees.length;
+        {archiveMonths.map(({ month, entries }) => {
+          const open = openArchiveMonth === month;
+          const cover = monthCovers[month];
+          const coverInputId = `month-cover-${month}`;
+          const uploading = monthCoverUploading === month;
           return (
-            <div key={cardKey} style={styles.archiveCard(eventHues[eventKey(iso, event.id)])}>
-              {/* Shut only. Open, the card *is* the evening -- the photos,
-                  who came, what was said -- and a washed-out copy of one of
-                  those photos behind all of it competes with the thing it
-                  was standing in for. The same wedge the calendar's cards
-                  use, so an event does not change shape on its way here. */}
-              {!open && event.image && (
+            <div key={month} style={styles.archiveCard(null)}>
+              {/* Shut only, the rule its own cards follow: open, the month is
+                  the evenings inside it, and a washed-out picture behind them
+                  reads as a stain on the cards rather than as the month's. */}
+              {!open && cover && (
                 <img
-                  src={eventImageUrl(event.image)}
+                  src={eventImageUrl(cover)}
                   alt=""
                   loading="lazy"
                   style={styles.eventCardImage}
@@ -4389,12 +4654,20 @@ export default function App() {
               )}
               <button
                 style={styles.archiveCardHead}
-                onClick={() => setOpenArchiveEvent(open ? null : cardKey)}
+                onClick={() => setOpenArchiveMonth(open ? null : month)}
                 aria-expanded={open}
               >
                 <div style={styles.archiveCardMain}>
-                  <div style={styles.archiveCardDate}>{archiveDateLabel(iso)}</div>
-                  <div style={styles.archiveCardTitle}>{event.title}</div>
+                  <div style={styles.archiveCardDate}>
+                    {entries.length}{" "}
+                    {pluralSl(entries.length, [
+                      "dogodek",
+                      "dogodka",
+                      "dogodki",
+                      "dogodkov",
+                    ])}
+                  </div>
+                  <div style={styles.archiveCardTitle}>{monthLabel(month)}</div>
                 </div>
                 <ChevronRight
                   size={18}
@@ -4408,78 +4681,47 @@ export default function App() {
               </button>
 
               {open && (
-                <div style={styles.archiveCardBody}>
-                  <div style={styles.archiveSummary}>
-                    {event.duration && <span>{event.duration}</span>}
-                    <span>
-                      {going}{" "}
-                      {pluralSl(going, [
-                        "udeleženec",
-                        "udeleženca",
-                        "udeleženci",
-                        "udeležencev",
-                      ])}
-                    </span>
-                    <span>
-                      {comments.length}{" "}
-                      {pluralSl(comments.length, [
-                        "komentar",
-                        "komentarja",
-                        "komentarji",
-                        "komentarjev",
-                      ])}
-                    </span>
-                  </div>
-
-                  {event.description && (
-                    <p style={styles.eventDescription}>{event.description}</p>
+                <div style={styles.archiveMonthBody}>
+                  {entries.map(({ iso, event }) =>
+                    renderArchiveEventCard(iso, event)
                   )}
-                  {event.link && (
-                    <a
-                      style={styles.eventLink}
-                      href={event.link}
-                      target="_blank"
-                      // noreferrer as well as noopener: the opened page has no business
-                      // knowing which calendar sent it, and anyone can add an event here.
-                      rel="noopener noreferrer"
-                    >
-                      <Link size={12} /> Povezava
-                    </a>
-                  )}
-
-                  {event.attendees.length > 0 && (
-                    <div style={styles.eventAttendees}>
-                      <span style={styles.attendeesLabel}>Prišli:</span>
-                      {event.attendees.map((n) => (
-                        <PersonChip
-                          key={n}
-                          name={n}
-                          color={personColors[n] || GREEN}
-                          self={n === name}
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  {renderPhotoStrip(iso, event.id)}
-                  {renderCommentThread(iso, event.id, "recap")}
-
-                  {/* Admin only: an archived event is everyone's memory of
-                      the evening, not just its author's, so the rule the
-                      calendar uses -- your own events are yours to delete --
-                      is the wrong one here. */}
+                  {/* Under the evenings rather than over them: the month is
+                      here to be read, and the one control that changes it
+                      belongs after what it belongs to. Admin only, like the
+                      bins on the cards above. */}
                   {isAdmin && (
-                    <div style={styles.archiveCardActions}>
+                    <div style={styles.archiveMonthCoverRow}>
+                      {cover && (
+                        <img
+                          src={eventImageUrl(cover)}
+                          alt=""
+                          style={styles.eventImagePreview}
+                        />
+                      )}
                       <button
-                        style={styles.archiveDelete}
+                        style={styles.addNoteButton}
+                        disabled={uploading}
                         onClick={() =>
-                          setDeletingEvent({ iso, event, fromArchive: true })
+                          document.getElementById(coverInputId)?.click()
                         }
-                        aria-label="Izbriši dogodek iz arhiva"
-                        title="Izbriši dogodek iz arhiva"
                       >
-                        <Trash2 size={13} />
+                        <Plus size={12} />{" "}
+                        {uploading
+                          ? "Nalagam …"
+                          : cover
+                            ? "Zamenjaj sliko meseca"
+                            : "Dodaj sliko meseca"}
                       </button>
+                      <input
+                        id={coverInputId}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          uploadMonthCover(month, e.target.files);
+                          e.target.value = "";
+                        }}
+                      />
                     </div>
                   )}
                 </div>

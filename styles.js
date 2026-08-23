@@ -1833,6 +1833,22 @@ export const styles = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+  // The evenings inside an open month. Inset from the month's own edge, so
+  // the nesting is visible without a rule or an indent guide -- the cards
+  // simply sit in from the card holding them.
+  archiveMonthBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    padding: "0 10px 10px 10px",
+  },
+  archiveMonthCoverRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    paddingTop: 10,
+    borderTop: "1px solid var(--divider)",
+  },
   archiveCardBody: {
     display: "flex",
     flexDirection: "column",
