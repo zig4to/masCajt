@@ -630,13 +630,15 @@ export const styles = {
     // A mouse drag across text would otherwise select it mid-swipe.
     userSelect: dragging ? "none" : "auto",
   }),
-  recentEventsTrack: (extendedCount, index, animate, dragPx) => ({
+  // No transform and no transition here on purpose. The strip drifts
+  // continuously, so its position is written straight to the node every frame
+  // by the carousel's own loop: a transition would fight that, and a
+  // transform rendered by React would be a frame behind it and would snap the
+  // strip back to wherever the last render thought it was.
+  recentEventsTrack: (extendedCount) => ({
     display: "flex",
     width: `${(extendedCount / 3) * 100}%`,
-    // The slot offset is a percentage of the (much wider) track, while the
-    // drag arrives as raw viewport pixels; calc() is what lets the two mix.
-    transform: `translateX(calc(-${index * (100 / extendedCount)}% + ${dragPx}px))`,
-    transition: animate ? "transform 500ms ease" : "none",
+    willChange: "transform",
   }),
   recentEventSlot: (percent) => ({
     flex: `0 0 ${percent}%`,

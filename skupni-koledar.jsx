@@ -1,4 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+} from "react";
 import {
   Users,
   ChevronRight,
@@ -1135,8 +1141,18 @@ const DAYS_SHOWN = 10;
 // the strip springs back to where it was.
 const SWIPE_THRESHOLD_PX = 40;
 
-// How long a card sits before the strip slides to the next one.
-const AUTO_ADVANCE_MS = 6000;
+// How fast the strip drifts, in card widths per second. The strip used to
+// jump a whole card every six seconds; this is a little slower than that
+// average, because a jump spends most of its six seconds standing still and
+// a drift never does -- matching the old rate exactly reads as restless.
+//
+// A card is a third of the strip, so on a 390px phone this is about 14px a
+// second. Raise it to hurry the strip along, lower it to calm it down.
+const DRIFT_CARDS_PER_SEC = 0.12;
+
+// How long the strip holds still before it starts, counted from the moment
+// there is something on it to read.
+const DRIFT_START_DELAY_MS = 5000;
 
 // "Aktualni dogodki" strip: shows 3 cards, advances one card-width every 6s,
 // and can also be dragged by mouse or finger. Both directions wrap seamlessly,
@@ -1411,9 +1427,6 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
   const canSlide = count > CARDS_IN_VIEW;
   const base = canSlide ? CARDS_IN_VIEW : 0;
 
-  const [index, setIndex] = useState(base);
-  const [animate, setAnimate] = useState(true);
-  const [dragPx, setDragPx] = useState(0);
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef(null);
   // A swipe ends in a click on whichever card the pointer happened to be
@@ -1423,48 +1436,83 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
   // can't still be swallowing clicks minutes later.
   const dragEndedAtRef = useRef(0);
   const viewportRef = useRef(null);
+  const trackRef = useRef(null);
 
-  // Re-center whenever the list itself changes length, so an index left over
-  // from a longer list can't park the strip on padding slots.
+  const extendedCount = canSlide ? count + 2 * CARDS_IN_VIEW : count;
+
+  // Where the strip stands, in card widths from the start of the extended
+  // list -- a float, and deliberately not React state. It changes every
+  // frame, and re-rendering the whole strip sixty times a second to move it
+  // is work nobody can see. The animation loop is its only writer; the drag
+  // and the length check below just nudge it.
+  const offsetRef = useRef(base);
+  const dragPxRef = useRef(0);
+  // When the drift may begin. Set once, from the moment the strip has enough
+  // cards to move, rather than at mount: on a slow first load the events
+  // arrive a second or two in, and a countdown started before they did would
+  // have the strip walking off almost as soon as it appeared.
+  const driftFromRef = useRef(0);
+
+  // Writes the position to the node. Everything that moves the strip ends
+  // here, so there is one place that knows how an offset becomes a transform.
+  const paint = useCallback(() => {
+    const node = trackRef.current;
+    if (!node) return;
+    // The offset is in cards and the slot width is a percentage of the (much
+    // wider) track, while the drag arrives as raw viewport pixels; calc() is
+    // what lets the two mix.
+    const slot = 100 / extendedCount;
+    node.style.transform = `translateX(calc(-${
+      offsetRef.current * slot
+    }% + ${dragPxRef.current}px))`;
+  }, [extendedCount]);
+
+  // Re-centre whenever the list itself changes length, so an offset left over
+  // from a longer list cannot park the strip on padding slots. Before paint
+  // rather than after, or the first frame of a new list shows the copies at
+  // the front instead of the cards they stand in for.
+  useLayoutEffect(() => {
+    offsetRef.current = base;
+    dragPxRef.current = 0;
+    paint();
+  }, [count, base, paint]);
+
   useEffect(() => {
-    setAnimate(false);
-    setIndex(base);
-  }, [count, base]);
+    if (canSlide && !driftFromRef.current) {
+      driftFromRef.current = performance.now() + DRIFT_START_DELAY_MS;
+    }
+  }, [canSlide]);
 
-  // Auto-advance. Restarting on `dragging` doubles as the pause: letting go
-  // starts a fresh interval rather than firing whatever was left of the old one.
-  useEffect(() => {
-    if (!canSlide || dragging) return;
-    const timer = setInterval(() => setIndex((i) => i + 1), AUTO_ADVANCE_MS);
-    return () => clearInterval(timer);
-  }, [canSlide, dragging]);
-
-  // Sitting on a padding slot: let the slide finish, then jump to the real
-  // card it was a copy of.
+  // The drift itself. One frame at a time rather than a CSS animation,
+  // because the strip also has to be draggable and to wrap seamlessly, and
+  // both of those mean knowing where it is at any instant.
   useEffect(() => {
     if (!canSlide) return;
-    if (index >= base && index < base + count) return;
-    const target = index >= base + count ? base : base + count - 1;
-    const t = setTimeout(() => {
-      setAnimate(false);
-      setIndex(target);
-    }, 520); // just past the 500ms slide transition
-    return () => clearTimeout(t);
-  }, [index, base, count, canSlide]);
-
-  // Any setAnimate(false) above is only meant to cover a single instant jump,
-  // so re-arm the transition on the next frame.
-  useEffect(() => {
-    if (animate) return;
-    const raf = requestAnimationFrame(() => setAnimate(true));
+    let raf = 0;
+    let last = 0;
+    function frame(now) {
+      // A drag, or the opening pause, banks no time: `last` follows the clock
+      // even while still, so letting go resumes rather than lurching forward
+      // by however long the pause lasted.
+      if (!dragging && driftFromRef.current && now >= driftFromRef.current && last) {
+        offsetRef.current += ((now - last) / 1000) * DRIFT_CARDS_PER_SEC;
+        // Past the last real card the strip is standing on the copies of the
+        // first ones, which look identical -- so stepping back a whole list
+        // here is invisible, and is what makes the loop endless.
+        if (offsetRef.current >= base + count) offsetRef.current -= count;
+      }
+      last = now;
+      paint();
+      raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [animate]);
+  }, [canSlide, dragging, base, count, paint]);
 
   function handlePointerDown(e) {
     if (!canSlide) return;
     dragRef.current = e.clientX;
     setDragging(true);
-    setAnimate(false); // follow the finger 1:1 instead of easing behind it
   }
 
   // Tracked on the window, and deliberately without setPointerCapture: capture
@@ -1477,25 +1525,36 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
 
     function move(e) {
       if (dragRef.current === null) return;
-      setDragPx(e.clientX - dragRef.current);
+      dragPxRef.current = e.clientX - dragRef.current;
+      paint();
     }
 
     function end(e) {
       const startX = dragRef.current;
       dragRef.current = null;
-      setDragPx(0);
-      setAnimate(true);
-      setDragging(false);
-      if (startX === null || e.type === "pointercancel") return;
+      const dx = startX === null ? 0 : e.clientX - startX;
+      dragPxRef.current = 0;
 
-      const dx = e.clientX - startX;
+      // Where the finger left it is where the drift picks up: the strip no
+      // longer has card positions to snap to, so a gesture is worth exactly
+      // the distance it travelled. Cancelled gestures spring back instead.
+      if (startX !== null && e.type !== "pointercancel" && dx) {
+        const width = trackRef.current
+          ? trackRef.current.getBoundingClientRect().width / extendedCount
+          : 0;
+        if (width > 0) {
+          offsetRef.current -= dx / width;
+          // Dragged backwards past the front copies, or forwards past the
+          // back ones: fold around so the endless loop survives a swipe.
+          while (offsetRef.current < base) offsetRef.current += count;
+          while (offsetRef.current >= base + count) offsetRef.current -= count;
+        }
+      }
+      paint();
+      setDragging(false);
       // Well below SWIPE_THRESHOLD_PX: a drag too small to move the strip
-      // should still not read as a tap on the card it ended over.
+      // much should still not read as a tap on the card it ended over.
       if (Math.abs(dx) > 4) dragEndedAtRef.current = performance.now();
-      // One gesture moves one card however far it travelled: the cards are
-      // only a third of a phone screen wide, so a long flick meaning "jump
-      // four ahead" is far less likely than one that just overshot.
-      if (Math.abs(dx) >= SWIPE_THRESHOLD_PX) setIndex((i) => i + (dx < 0 ? 1 : -1));
     }
 
     window.addEventListener("pointermove", move);
@@ -1506,7 +1565,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", end);
     };
-  }, [dragging]);
+  }, [dragging, paint, extendedCount, base, count]);
 
   if (count === 0) return null;
 
@@ -1535,7 +1594,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay }) {
         style={styles.recentEventsViewport(canSlide, dragging)}
         onPointerDown={handlePointerDown}
       >
-        <div style={styles.recentEventsTrack(extended.length, index, animate, dragPx)}>
+        <div ref={trackRef} style={styles.recentEventsTrack(extended.length)}>
           {extended.map(({ ev, hue, seamAfter }, i) => (
             <div key={`${ev.id}-${i}`} style={styles.recentEventSlot(slotPercent)}>
               {seamAfter && <div style={styles.recentEventsSeam} />}
