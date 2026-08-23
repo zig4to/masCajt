@@ -1797,10 +1797,13 @@ export const styles = {
     alignItems: "center",
     gap: 10,
     width: "100%",
-    // Taller than the 14 it started at. The wedge is cut as a share of the
-    // card, so on a two-line card it was a sliver -- the extra height is what
-    // gives the picture enough of a diagonal to be worth showing.
-    padding: "20px 14px",
+    // A floor rather than more padding. The wedge is cut as a share of the
+    // card, so height is what gives the picture its diagonal -- and a floor
+    // holds that diagonal identical down the whole list, where padding alone
+    // would let a long title make one card taller than its neighbours.
+    minHeight: 108,
+    padding: "16px 14px",
+    boxSizing: "border-box",
     textAlign: "left",
     font: "inherit",
     color: "inherit",
