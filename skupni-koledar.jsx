@@ -4081,7 +4081,10 @@ export default function App() {
               disabled={!eventTitleDraft.trim()}
               onClick={() => saveEvent(iso, id)}
             >
-              Dodaj
+              {/* The same form does both jobs, and "Dodaj" on an event that
+                  already exists reads as though pressing it would leave a
+                  second copy behind. */}
+              {existing ? "Shrani" : "Dodaj"}
             </button>
           </div>
           {existing && (existing.createdBy === name || isAdmin) && (
