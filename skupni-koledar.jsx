@@ -29,6 +29,7 @@ import {
   Sun,
   Moon,
   Plus,
+  Star,
 } from "lucide-react";
 import {
   styles,
@@ -1109,6 +1110,9 @@ function PhotoLightbox({
   onDownload,
   onDownloadAll,
   downloading,
+  canSetCover,
+  isCover,
+  onSetCover,
 }) {
   const [dragPx, setDragPx] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -1237,6 +1241,27 @@ function PhotoLightbox({
               {downloading && downloading.total > 1
                 ? `${downloading.done}/${downloading.total}`
                 : `Vse (${photos.length})`}
+            </button>
+          )}
+          {/* Beside the download buttons rather than on the card behind:
+              you pick a cover by looking at the pictures, and this is the
+              only place they are big enough to choose between. Offered to
+              whoever may edit the event, since that is what it changes --
+              the cover is the whole club's view of the evening, not the
+              photographer's. */}
+          {canSetCover && (
+            <button
+              style={
+                isCover
+                  ? { ...styles.lightboxAction, opacity: 0.55, cursor: "default" }
+                  : styles.lightboxAction
+              }
+              onClick={isCover ? undefined : onSetCover}
+              disabled={isCover}
+              aria-label="Nastavi za naslovno sliko dogodka"
+            >
+              {isCover ? <Check size={12} /> : <Star size={12} />}
+              {isCover ? "Naslovna slika" : "Nastavi za naslovno sliko"}
             </button>
           )}
           {canDelete && (
@@ -3010,6 +3035,26 @@ export default function App() {
     }
   }
 
+  // Points an event at one of its own photos for a cover. Shaped like
+  // toggleAttendance rather than saveEvent: it changes one field on an event
+  // nobody is editing, so it reads the event, writes it back and lets the
+  // realtime feed carry it, instead of going through the draft form.
+  async function setEventCover(iso, id, path) {
+    const existing = dayEvents[iso]?.find((e) => e.id === id);
+    if (!existing) return;
+    const nextEvent = { ...existing, image: path };
+    setDayEvents((prev) => ({
+      ...prev,
+      [iso]: (prev[iso] || []).map((e) => (e.id === id ? nextEvent : e)),
+    }));
+    try {
+      await window.storage.set(eventKey(iso, id), encodeEvent(nextEvent), true);
+    } catch (e) {
+      setError("Naslovne slike ni bilo mogoče shraniti. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
   const appLoader = (
     <div style={styles.centerScreen}>
       <div style={styles.appLoader}>
@@ -3516,6 +3561,12 @@ export default function App() {
     ? lightboxPhotos.findIndex((p) => p.id === lightbox.id)
     : -1;
 
+  // The event the open album belongs to, so the lightbox can say whether
+  // this picture is already the cover and whether this person may change it.
+  const lightboxEvent = lightbox
+    ? (dayEvents[lightbox.iso] || []).find((e) => e.id === lightbox.eventId)
+    : null;
+
   const photoLightbox = lightboxIndex >= 0 && (
     <PhotoLightbox
       photos={lightboxPhotos}
@@ -3527,6 +3578,20 @@ export default function App() {
       }
       canDelete={lightboxPhotos[lightboxIndex].author === name}
       onDelete={() => deletePhoto(lightbox.iso, lightbox.eventId, lightbox.id)}
+      canSetCover={
+        !!lightboxEvent && (lightboxEvent.createdBy === name || isAdmin)
+      }
+      isCover={
+        !!lightboxEvent &&
+        lightboxEvent.image === lightboxPhotos[lightboxIndex].path
+      }
+      onSetCover={() =>
+        setEventCover(
+          lightbox.iso,
+          lightbox.eventId,
+          lightboxPhotos[lightboxIndex].path
+        )
+      }
       downloading={photoDownload}
       onDownload={() =>
         downloadPhoto(
@@ -4309,6 +4374,19 @@ export default function App() {
           const going = event.attendees.length;
           return (
             <div key={cardKey} style={styles.archiveCard(eventHues[eventKey(iso, event.id)])}>
+              {/* Shut only. Open, the card *is* the evening -- the photos,
+                  who came, what was said -- and a washed-out copy of one of
+                  those photos behind all of it competes with the thing it
+                  was standing in for. The same wedge the calendar's cards
+                  use, so an event does not change shape on its way here. */}
+              {!open && event.image && (
+                <img
+                  src={eventImageUrl(event.image)}
+                  alt=""
+                  loading="lazy"
+                  style={styles.eventCardImage}
+                />
+              )}
               <button
                 style={styles.archiveCardHead}
                 onClick={() => setOpenArchiveEvent(open ? null : cardKey)}

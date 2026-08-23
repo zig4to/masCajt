@@ -1782,6 +1782,11 @@ export const styles = {
   // stack by the dozen down a scrolling list, where the full-strength tint
   // stops reading as a highlight and starts reading as noise.
   archiveCard: (hue) => ({
+    // Positioned and isolated for the image wedge, exactly as eventCard is:
+    // isolation gives the card its own stacking context, which is what keeps
+    // a z-index of -1 above the card's background instead of behind it.
+    position: "relative",
+    isolation: "isolate",
     borderRadius: 14,
     overflow: "hidden",
     background: hue ? `rgba(${hue}, 0.12)` : "var(--card-bg)",
@@ -1792,7 +1797,10 @@ export const styles = {
     alignItems: "center",
     gap: 10,
     width: "100%",
-    padding: 14,
+    // Taller than the 14 it started at. The wedge is cut as a share of the
+    // card, so on a two-line card it was a sliver -- the extra height is what
+    // gives the picture enough of a diagonal to be worth showing.
+    padding: "20px 14px",
     textAlign: "left",
     font: "inherit",
     color: "inherit",
