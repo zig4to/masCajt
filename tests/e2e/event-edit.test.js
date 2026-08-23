@@ -52,8 +52,14 @@ async function loginAsThrowawayUser(page, baseUrl) {
 
 // Day cards all start collapsed, so every test here has to open today before
 // it can reach the event inside it.
+//
+// Reached through the day's own element rather than by its text. "Danes" is
+// no longer unique on the page: the event strip names today's card that way
+// too, and being the first match, the strip's copy is what a text locator
+// finds. It is also animated, so Playwright waits for it to stop moving and
+// never gets to click anything at all.
 async function openToday(page) {
-  await page.locator('button:has-text("Danes")').first().click();
+  await page.locator(`#day-${localToday()} button`).first().click();
   await page.waitForTimeout(300);
 }
 
