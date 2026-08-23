@@ -3521,6 +3521,17 @@ export default function App() {
   // every time anything shipped.
   const whatsNewSection = (
     <div style={styles.whatsNewSection}>
+      {/* The archive is otherwise only in the menu, which is where you look
+          when you already know what you want. This is for the end of the
+          page, where you have run out of what is coming and the next
+          thought is what has been. No aria-expanded and no rotating
+          chevron: the two buttons under it unfold in place, this one
+          leaves. */}
+      <button style={styles.whatsNewToggle} onClick={() => goTo("archive")}>
+        <Archive size={13} />
+        Arhiv dogodkov
+        <ChevronRight size={14} style={{ marginLeft: "auto" }} />
+      </button>
       <button
         style={styles.whatsNewToggle}
         onClick={() => setShowWhatsNew((open) => !open)}
