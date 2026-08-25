@@ -746,6 +746,60 @@ export function sortPhotos(list) {
   return [...list].sort((a, b) => Number(a.id) - Number(b.id) || a.id.localeCompare(b.id));
 }
 
+// "Kva rabmo" -- the things an event needs somebody to bring. Rows of their
+// own, the shape comments and photos already take: adding one is an insert
+// rather than a read-modify-write of the event, so two people writing into
+// the list in the same moment cannot overwrite each other. Only on events
+// that asked for it, which is what event.checklist marks.
+const NEED_MARKER = "__need__";
+
+export function needKey(iso, eventId, needId) {
+  return `avail:${iso}:${NEED_MARKER}${eventId}:${needId}`;
+}
+
+export function needGroup(iso, eventId) {
+  return `${iso}:${eventId}`;
+}
+
+export function parseNeedPerson(person) {
+  const parsed = parseMarkedPerson(person, NEED_MARKER);
+  return parsed && { eventId: parsed.ownerId, needId: parsed.itemId };
+}
+
+// `by` is whoever took the item on, and doubles as the ticked flag: nobody
+// has claimed it while it is "". Who *typed* the item is deliberately not
+// stored -- the list is what the group needs, not a record of who thought of
+// what, and a name against every line would read as an assignment.
+export function encodeNeed(need) {
+  return JSON.stringify({ text: need.text, by: need.by || "" });
+}
+
+export function decodeNeed(raw, id) {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.text !== "string" || !parsed.text.trim()) return null;
+    return {
+      id,
+      text: parsed.text,
+      by: typeof parsed.by === "string" ? parsed.by : "",
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+// Still needed first, already covered at the bottom. Inside each half the
+// order they were added, so ticking one item moves that item and leaves
+// every other line where the person reading it last saw it.
+export function sortNeeds(list) {
+  return [...list].sort(
+    (a, b) =>
+      Number(!!a.by) - Number(!!b.by) ||
+      Number(a.id) - Number(b.id) ||
+      a.id.localeCompare(b.id)
+  );
+}
+
 // Straight off a phone a photo is 3-5 MB, and every archive view pulls all of
 // them down again against a 5 GB/month egress budget -- about a dozen full
 // browses before it is spent. Longest side capped at 1600px takes that to
@@ -1138,6 +1192,15 @@ function archiveSlabLower(upper) {
 // grows past the point where anybody reads it.
 const CHANGELOG = [
   {
+    date: "2026-08-25",
+    items: [
+      "Kva rabmo: seznam stvari za dogodek, poleg komentarjev na kartici",
+      "Na seznam lahko doda kdorkoli, in kdorkoli označi, da stvar prinese",
+      "Označena stvar se prečrta, gre na dno in pove, kdo jo prinese",
+      "Seznam vklopiš pri dogodku pod «Več možnosti»",
+    ],
+  },
+  {
     date: "2026-08-24",
     items: [
       "Dogodek se da prestaviti na drug dan; komentarji in slike gredo z njim",
@@ -1221,9 +1284,10 @@ const DRIFT_START_DELAY_MS = 7000;
 // up everywhere below instead of a plain 0.
 // How long a tapped chip keeps its name up. Long enough to read, short
 // enough that you do not have to dismiss it.
-// The packing list, which lives in its own little app. Which events show the
-// button is a per-event setting under "Več možnosti": what you forget is the
-// same whatever the outing is, but most outings need nothing packed at all.
+// The standing packing list, which lives in its own little app and is the
+// same whatever the outing is. Reached from the menu only. What one
+// particular evening needs somebody to carry is a different question, and
+// that is the per-event "Kva rabmo" list on the card itself.
 const CHECKLIST_URL = "https://zig4to.github.io/Checkliste/";
 
 const NAME_POPUP_MS = 3000;
@@ -1935,6 +1999,8 @@ export default function App() {
   const [dayComments, setDayComments] = useState({});
   // Photos per event, keyed like the comment threads: "iso:eventId" -> [photo]
   const [dayPhotos, setDayPhotos] = useState({});
+  // "Kva rabmo" per event, keyed the same way: "iso:eventId" -> [need]
+  const [dayNeeds, setDayNeeds] = useState({});
   // How many uploads are still in flight per event, so the strip can show
   // placeholders. A count and not a boolean: several files can be picked at
   // once and each finishes on its own.
@@ -1956,6 +2022,11 @@ export default function App() {
   // threads in one day would push the rest of it off screen.
   const [openComments, setOpenComments] = useState(null);
   const [commentDrafts, setCommentDrafts] = useState({});
+  // The one open "Kva rabmo" list, and what is half-typed into each. Kept
+  // apart from openComments so the two can be open together: the list says
+  // what to bring and the thread is where somebody says they cannot.
+  const [openNeeds, setOpenNeeds] = useState(null);
+  const [needDrafts, setNeedDrafts] = useState({});
   const [chipAnim, setChipAnim] = useState({});
   // Names already gone from an event's attendees but still on screen playing
   // their exit: "iso:eventId" -> [person]. Same lifetime as the "out" flag
@@ -2136,6 +2207,7 @@ export default function App() {
       const events = {};
       const comments = {};
       const photos = {};
+      const needs = {};
       const covers = {};
       for (const iso of days) {
         result[iso] = {};
@@ -2160,6 +2232,15 @@ export default function App() {
           if (photo) {
             const group = photoGroup(iso, parsed.eventId);
             (photos[group] = photos[group] || []).push(photo);
+          }
+          continue;
+        }
+        if (person.startsWith(NEED_MARKER)) {
+          const parsed = parseNeedPerson(person);
+          const need = parsed && decodeNeed(row.value, parsed.needId);
+          if (need) {
+            const group = needGroup(iso, parsed.eventId);
+            (needs[group] = needs[group] || []).push(need);
           }
           continue;
         }
@@ -2208,6 +2289,9 @@ export default function App() {
       for (const group of Object.keys(photos)) {
         photos[group] = sortPhotos(photos[group]);
       }
+      for (const group of Object.keys(needs)) {
+        needs[group] = sortNeeds(needs[group]);
+      }
       setDayData(result);
       // Merged, not replaced. The archive keeps its events and threads in
       // these same maps, and refreshing the visible window must not throw
@@ -2231,6 +2315,14 @@ export default function App() {
           if (!(iso in result)) kept[group] = list;
         }
         return { ...kept, ...photos };
+      });
+      setDayNeeds((prev) => {
+        const kept = {};
+        for (const [group, list] of Object.entries(prev)) {
+          const iso = group.slice(0, group.indexOf(":"));
+          if (!(iso in result)) kept[group] = list;
+        }
+        return { ...kept, ...needs };
       });
       setMonthCovers((prev) => ({ ...prev, ...covers }));
       setError(null);
@@ -2441,6 +2533,29 @@ export default function App() {
                 ? list.map((c) => (c.id === comment.id ? comment : c))
                 : [...list, comment];
               return { ...prev, [group]: sortComments(next) };
+            });
+            return;
+          }
+
+          if (person.startsWith(NEED_MARKER)) {
+            const parsed = parseNeedPerson(person);
+            if (!parsed) return;
+            const group = needGroup(iso, parsed.eventId);
+            setDayNeeds((prev) => {
+              const list = prev[group] || [];
+              if (type === "DELETE") {
+                return { ...prev, [group]: list.filter((n) => n.id !== parsed.needId) };
+              }
+              const need = decodeNeed(value, parsed.needId);
+              if (!need) return prev;
+              // Ticking an item is an update of the row that is already
+              // there, so unlike a comment this arrives as a change to a
+              // line on screen far more often than as a new one. Matching
+              // on id covers both, and covers the echo of your own tick.
+              const next = list.some((n) => n.id === need.id)
+                ? list.map((n) => (n.id === need.id ? need : n))
+                : [...list, need];
+              return { ...prev, [group]: sortNeeds(next) };
             });
             return;
           }
@@ -2918,6 +3033,7 @@ export default function App() {
       list: dayComments[commentGroup(fromIso, event.id, kind)] || [],
     }));
     const photos = dayPhotos[photoGroup(fromIso, event.id)] || [];
+    const needs = dayNeeds[needGroup(fromIso, event.id)] || [];
 
     await window.storage.set(eventKey(toIso, event.id), encodeEvent(event), true);
     for (const { kind, list } of threads) {
@@ -2932,6 +3048,9 @@ export default function App() {
     for (const p of photos) {
       await window.storage.set(photoKey(toIso, event.id, p.id), encodePhoto(p), true);
     }
+    for (const n of needs) {
+      await window.storage.set(needKey(toIso, event.id, n.id), encodeNeed(n), true);
+    }
 
     await window.storage.delete(eventKey(fromIso, event.id), true);
     for (const { kind, list } of threads) {
@@ -2941,6 +3060,9 @@ export default function App() {
     }
     for (const p of photos) {
       await window.storage.delete(photoKey(fromIso, event.id, p.id), true);
+    }
+    for (const n of needs) {
+      await window.storage.delete(needKey(fromIso, event.id, n.id), true);
     }
 
     // The local copies follow, so the move shows without a reload.
@@ -2956,6 +3078,12 @@ export default function App() {
       const next = { ...prev };
       delete next[photoGroup(fromIso, event.id)];
       if (photos.length) next[photoGroup(toIso, event.id)] = photos;
+      return next;
+    });
+    setDayNeeds((prev) => {
+      const next = { ...prev };
+      delete next[needGroup(fromIso, event.id)];
+      if (needs.length) next[needGroup(toIso, event.id)] = needs;
       return next;
     });
   }
@@ -3089,6 +3217,47 @@ export default function App() {
       );
     } catch (e) {
       setError("Komentarja ni bilo mogoče objaviti. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
+  // Anyone can put something on the list -- that is the point of it. The row
+  // carries no author, so nothing here records who typed it.
+  async function addNeed(iso, eventId) {
+    const group = needGroup(iso, eventId);
+    const text = (needDrafts[group] || "").trim();
+    if (!text || !name) return;
+    const need = { id: String(Date.now()), text, by: "" };
+    setDayNeeds((prev) => ({
+      ...prev,
+      [group]: sortNeeds([...(prev[group] || []), need]),
+    }));
+    setNeedDrafts((prev) => ({ ...prev, [group]: "" }));
+    try {
+      await window.storage.set(needKey(iso, eventId, need.id), encodeNeed(need), true);
+    } catch (e) {
+      setError("Stvari ni bilo mogoče dodati. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
+  // Ticking claims the item under your own name; unticking hands it back to
+  // the list. Anybody can untick, not only whoever ticked it: someone who
+  // says at the door that they forgot it needs the line to go back to red,
+  // and it is a shopping list, not a ledger.
+  async function toggleNeed(iso, eventId, needId) {
+    const group = needGroup(iso, eventId);
+    const current = (dayNeeds[group] || []).find((n) => n.id === needId);
+    if (!current || !name) return;
+    const next = { ...current, by: current.by ? "" : name };
+    setDayNeeds((prev) => ({
+      ...prev,
+      [group]: sortNeeds((prev[group] || []).map((n) => (n.id === needId ? next : n))),
+    }));
+    try {
+      await window.storage.set(needKey(iso, eventId, needId), encodeNeed(next), true);
+    } catch (e) {
+      setError("Stvari ni bilo mogoče označiti. Poskusi znova.");
       loadAllData();
     }
   }
@@ -4368,7 +4537,15 @@ export default function App() {
 
   // `trailing` rides in the toggle's own row rather than beside the block,
   // which would centre it against the panel once the thread is open.
-  function renderCommentThread(iso, eventId, kind = "plan", trailing = null) {
+  // `below` hangs under both, and is how the "Kva rabmo" list gets the card's
+  // whole width while its button stays up in the row beside Komentiraj.
+  function renderCommentThread(
+    iso,
+    eventId,
+    kind = "plan",
+    trailing = null,
+    below = null
+  ) {
     const key = commentGroup(iso, eventId, kind);
     const comments = dayComments[key] || [];
     const open = openComments === key;
@@ -4393,6 +4570,77 @@ export default function App() {
           {trailing}
         </div>
         {open && renderCommentPanel(iso, eventId, kind)}
+        {below}
+      </div>
+    );
+  }
+
+  // What this particular evening needs somebody to carry. Anyone may add and
+  // anyone may tick, which is why nothing here is gated on who you are: the
+  // list belongs to the outing, not to the person who started it.
+  function renderNeedsPanel(iso, eventId) {
+    const group = needGroup(iso, eventId);
+    const needs = dayNeeds[group] || [];
+    const draft = needDrafts[group] || "";
+    return (
+      <div style={styles.commentsPanel}>
+        {/* The box for the next thing sits above the list rather than below
+            it, the other way round from the comment thread. A thread is read
+            downwards and answered at the end; this is a list being filled,
+            and the ticked half at the bottom would push the box out of
+            reach as it grew. */}
+        <div style={styles.commentForm}>
+          <input
+            style={styles.commentInput}
+            placeholder="Kaj rabmo?"
+            value={draft}
+            onChange={(e) =>
+              setNeedDrafts((prev) => ({ ...prev, [group]: e.target.value }))
+            }
+            onKeyDown={(e) => e.key === "Enter" && addNeed(iso, eventId)}
+          />
+          <button
+            style={{
+              ...styles.needAddButton,
+              opacity: draft.trim() ? 1 : 0.5,
+            }}
+            disabled={!draft.trim()}
+            onClick={() => addNeed(iso, eventId)}
+            aria-label="Dodaj na seznam"
+            title="Dodaj na seznam"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+        {needs.length === 0 ? (
+          <div style={styles.commentsEmpty}>Seznam je še prazen.</div>
+        ) : (
+          <div style={styles.needsList}>
+            {needs.map((need) => (
+              // A real label around a real checkbox, so the whole line is the
+              // hit target -- the same trick the event form's rows use.
+              <label key={need.id} style={styles.needRow}>
+                <input
+                  type="checkbox"
+                  style={styles.eventCheckbox}
+                  checked={!!need.by}
+                  onChange={() => toggleNeed(iso, eventId, need.id)}
+                />
+                <span style={styles.needText(!!need.by)}>{need.text}</span>
+                {need.by && (
+                  <span style={styles.needBy}>
+                    <span style={styles.needByLabel}>Prinesel:</span>
+                    <PersonChip
+                      name={need.by}
+                      color={personColors[need.by] || GREEN}
+                      self={need.by === name}
+                    />
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
@@ -4494,6 +4742,9 @@ export default function App() {
           </button>
           {showEventMore && (
             <div style={styles.eventMorePanel}>
+              {/* Named for what appears on the card rather than for the
+                  field behind it: the person ticking this is deciding
+                  whether this evening needs a list of things to bring. */}
               <label style={styles.eventCheckRow}>
                 <input
                   type="checkbox"
@@ -4501,7 +4752,7 @@ export default function App() {
                   checked={eventChecklistDraft}
                   onChange={(e) => setEventChecklistDraft(e.target.checked)}
                 />
-                Checklist
+                Kva rabmo
               </label>
               {/* Only for an event that exists. Choosing a day for one that
                   does not yet would just be creating it somewhere else,
@@ -4779,24 +5030,43 @@ export default function App() {
                 iso,
                 event.id,
                 "plan",
-                /* Icon only, and beside the comment button rather than on
-                   a line of its own: it does not need a row to say so. The
-                   label survives as the accessible name and the tooltip --
-                   an unlabelled square is a guess otherwise. Only on the
-                   events that asked for it: a packing list means something
-                   before a weekend away and nothing before a drink in town. */
+                /* Beside the comment button rather than on a line of its
+                   own, and labelled rather than an icon on its own: it
+                   opens a list nobody has seen yet, and a bare square is a
+                   guess. Only on the events that asked for it -- a list of
+                   things to bring means something before a weekend away and
+                   nothing before a drink in town. */
                 event.checklist ? (
-                  <a
-                    style={styles.eventLinkIcon}
-                    href={CHECKLIST_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Nam Puzabu"
-                    title="Nam Puzabu"
-                  >
-                    <ListChecks size={14} />
-                  </a>
-                ) : null
+                  (() => {
+                    const group = needGroup(iso, event.id);
+                    const needs = dayNeeds[group] || [];
+                    const left = needs.filter((n) => !n.by).length;
+                    const open = openNeeds === group;
+                    return (
+                      <button
+                        style={styles.commentsToggle}
+                        onClick={() => setOpenNeeds(open ? null : group)}
+                        aria-expanded={open}
+                      >
+                        <ListChecks size={12} />
+                        {/* What is left to sort out, not how long the list
+                            is: a list of six with six people carrying them
+                            needs nobody's attention. */}
+                        {left > 0 ? `Kva rabmo (${left})` : "Kva rabmo"}
+                        <ChevronRight
+                          size={14}
+                          style={{
+                            transform: open ? "rotate(90deg)" : "none",
+                            transition: "transform 150ms ease",
+                          }}
+                        />
+                      </button>
+                    );
+                  })()
+                ) : null,
+                event.checklist && openNeeds === needGroup(iso, event.id)
+                  ? renderNeedsPanel(iso, event.id)
+                  : null
               )}
             </div>
           );

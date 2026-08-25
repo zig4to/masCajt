@@ -1710,6 +1710,65 @@ export const styles = {
     borderRadius: 9,
     cursor: "pointer",
   },
+  // Square, where the comment box's is a word. "Objavi" says what happens to
+  // a paragraph somebody wrote; a plus on a list says the same thing in the
+  // space a one-word item deserves, and keeps the field itself as wide as
+  // possible on a phone.
+  needAddButton: {
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 34,
+    height: 34,
+    padding: 0,
+    color: "#fff",
+    background: GREEN,
+    border: "none",
+    borderRadius: 9,
+    cursor: "pointer",
+  },
+  // Capped and scrolling, for the same reason the comment list is: a long
+  // list must not push the day off screen, and the box for the next item is
+  // above it, so it stays in reach however far this scrolls.
+  needsList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 2,
+    maxHeight: 220,
+    overflowY: "auto",
+  },
+  needRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "5px 0",
+    cursor: "pointer",
+  },
+  // Struck through and faded once somebody has it, so the half of the list
+  // still to sort out is what the eye lands on. It keeps the row's slack,
+  // which is what holds "Prinesel:" against the right-hand edge.
+  needText: (done) => ({
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    color: done ? "var(--text-faint)" : "var(--text)",
+    textDecoration: done ? "line-through" : "none",
+    // Free text, same as a comment: one long word has to wrap rather than
+    // push the panel wider than the card around it.
+    overflowWrap: "anywhere",
+  }),
+  needBy: {
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+  },
+  needByLabel: {
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: "var(--text-faint)",
+  },
   // Sits inside the day list, so it reads as the list continuing rather
   // than as a control belonging to the page around it.
   whatsNewSection: {
