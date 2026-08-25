@@ -462,10 +462,6 @@ export const styles = {
     textDecoration: "none",
     cursor: "pointer",
   },
-  menuLinkArrow: {
-    marginLeft: "auto",
-    color: "var(--text-faint)",
-  },
   menuItemNote: {
     marginLeft: "auto",
     fontSize: 10,

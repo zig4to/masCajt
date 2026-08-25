@@ -24,7 +24,6 @@ import {
   Smartphone,
   Check,
   Link,
-  ArrowUpRight,
   FolderDown,
   ListChecks,
   Megaphone,
@@ -4557,9 +4556,9 @@ export default function App() {
             <Archive size={14} /> Arhiv
             {view === "archive" && <span style={styles.menuItemNote}>tu si</span>}
           </button>
-          {/* A link out, not a view: this one leaves the app, which is why it
-              is an anchor and why it says so with an arrow rather than
-              pretending to be another page of the calendar. */}
+          {/* A link out, not a view: still an anchor, and it still opens in
+              its own tab, so nothing about where it goes has changed -- it
+              just no longer announces it with an arrow. */}
           <a
             style={styles.menuLink}
             href={CHECKLIST_URL}
@@ -4568,7 +4567,6 @@ export default function App() {
             onClick={() => setMenuOpen(false)}
           >
             <ListChecks size={14} /> Checkliste
-            <ArrowUpRight size={13} style={styles.menuLinkArrow} />
           </a>
           <button
             style={styles.menuItem(false)}
@@ -6666,15 +6664,25 @@ export default function App() {
           const allEntries = Object.entries(entries).sort(([a], [b]) =>
             a === name ? -1 : b === name ? 1 : a.localeCompare(b)
           );
-          // Whose two initials the row shows is drawn from everyone who
-          // entered, with no place kept for you -- otherwise the same handful
-          // of names lead every row, every day. The chips carry each person's
-          // own color here; free/busy stays the job of the entry rows inside
-          // the open day, where there is room to read it.
-          // The date is folded into the seed so different days pick different
-          // people rather than all agreeing on one pair.
+          // Whose two initials the row shows: everyone who has said they are
+          // coming to one of the day's events. Who entered hours is a
+          // different question and a quieter one -- it says when somebody
+          // could come, where this says who is. It still has the entry rows
+          // inside the open day, and the count below when there is no event
+          // to answer for the row.
+          //
+          // A set, because a day can hold two events and somebody may be down
+          // for both; their chip belongs on the row once.
+          //
+          // Shuffled with no place kept for you, or the same handful of names
+          // lead every row, every day. The date is folded into the seed so
+          // different days pick different people rather than all agreeing on
+          // one pair.
+          const dayAttendees = [
+            ...new Set((dayEvents[iso] || []).flatMap((ev) => ev.attendees)),
+          ];
           const dayChips = shuffleBySeed(
-            Object.keys(entries),
+            dayAttendees,
             chipSeedRef.current + iso
           ).map((n) => [n, personColors[n] || NEUTRAL_BG]);
           const hiddenChips = dayChips.length - DAY_CHIPS_SHOWN;
@@ -6689,7 +6697,12 @@ export default function App() {
                   <div style={styles.dayName}>{dayLabel(d, today)}</div>
                 </div>
                 <div style={styles.dayPeople}>
-                  {allEntries.length === 0 && !(dayEvents[iso]?.length > 0) ? (
+                  {/* The count stands in only on a day with no event at all.
+                      With an event but nobody signed up yet the row says
+                      nothing here -- "Še nihče ni vnesel" is about hours, and
+                      beside a Dogodek badge it would read as though it were
+                      about the event. */}
+                  {dayChips.length === 0 && !(dayEvents[iso]?.length > 0) ? (
                     <span style={styles.noOne}>
                       {entryCountLabel(allEntries.length)}
                     </span>
@@ -6701,7 +6714,7 @@ export default function App() {
                       {hiddenChips > 0 && (
                         <span
                           style={styles.avatarChipMore}
-                          title={`Še ${hiddenChips} vnesenih`}
+                          title={`Še ${hiddenChips} prijavljenih`}
                         >
                           +{hiddenChips}
                         </span>
