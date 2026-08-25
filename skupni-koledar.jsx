@@ -146,14 +146,20 @@ const THEME_CSS = `
     height: 19px;
     margin: 0;
     background: var(--input-bg);
-    border: 1.5px solid var(--border-input);
+    /* Green while it is still empty, not the quiet grey the input fields
+       wear. An empty box on this list is the one thing on the card still
+       waiting on somebody, and it should look like it is asking. */
+    border: 1.5px solid var(--green);
     border-radius: 6px;
     cursor: pointer;
     transition: background 150ms ease, border-color 150ms ease,
       transform 120ms ease;
   }
+  /* The ring is already green, so hover has to say it some other way: the
+     box tints towards the colour it is about to become. Ahead of :checked,
+     which sets the same property and has to win once the box is filled. */
   .needCheck:hover {
-    border-color: var(--green);
+    background: var(--green-bg);
   }
   /* Under the finger, not after it: on a phone there is no hover to say the
      box is live, and this is the whole of the feedback before the row
