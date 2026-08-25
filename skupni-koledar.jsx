@@ -1719,7 +1719,7 @@ function PersonChip({ name, color, style, self }) {
 // view, the offset snaps to the matching real slot -- visually a no-op. Real
 // item 0 therefore lives at slot `perView`, not slot 0, which is why `base`
 // shows up everywhere below instead of a plain 0.
-function useDriftingStrip(count, perView) {
+function useDriftingStrip(count, perView, drift = true) {
   const canSlide = count > perView;
   const base = canSlide ? perView : 0;
   const extendedCount = canSlide ? count + 2 * perView : count;
@@ -1781,8 +1781,16 @@ function useDriftingStrip(count, perView) {
   // The drift itself. One frame at a time rather than a CSS animation,
   // because the strip also has to be draggable and to wrap seamlessly, and
   // both of those mean knowing where it is at any instant.
+  // Nothing is scheduled at all when the drift is off: a drag paints from its
+  // own handlers, so a frame loop with the advance taken out of it would be
+  // sixty repaints a second of a picture that never changes.
+  //
+  // A strip switched off mid-slide stays where it stands rather than
+  // snapping to the nearest card. It can only happen if pictures arrive
+  // while somebody is watching -- the drift does not begin for seven seconds
+  // -- and a jump would be the more startling of the two.
   useEffect(() => {
-    if (!canSlide) return;
+    if (!canSlide || !drift) return;
     let raf = 0;
     let last = 0;
     function frame(now) {
@@ -1802,7 +1810,7 @@ function useDriftingStrip(count, perView) {
     }
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [canSlide, dragging, base, count, paint]);
+  }, [canSlide, drift, dragging, base, count, paint]);
 
   function onPointerDown(e) {
     if (!canSlide) return;
@@ -1889,7 +1897,7 @@ function useDriftingStrip(count, perView) {
   };
 }
 
-function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
+function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) {
   const count = events.length;
   const {
     canSlide,
@@ -1899,7 +1907,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
     onPointerDown,
     wasDragged,
     extend,
-  } = useDriftingStrip(count, CARDS_IN_VIEW);
+  } = useDriftingStrip(count, CARDS_IN_VIEW, drift);
 
   if (count === 0) return null;
 
@@ -4341,12 +4349,41 @@ export default function App() {
     ...Object.values(dayComments).flatMap((list) => list.map((c) => c.author)),
   ]);
 
+  // Tonight's pictures, gathered across every event today rather than from
+  // one of them: a day with two outings is still one evening to anybody
+  // scrolling past, and two strips under one heading would say otherwise.
+  //
+  // Guarded on window.photos the same way the archive's strip is -- a browser
+  // still holding an older cached index.html has no photo shim, and this
+  // should quietly not appear rather than take the page down.
+  const todayPhotos =
+    today && window.photos
+      ? sortPhotos(
+          (dayEvents[today] || []).flatMap((ev) =>
+            (dayPhotos[photoGroup(today, ev.id)] || []).map((p) => ({
+              ...p,
+              eventId: ev.id,
+            }))
+          )
+        )
+      : [];
+
+  // One strip moves at a time. With tonight's pictures on screen the events
+  // above them hold still: two runs drifting past each other at the top of
+  // the page is a page that will not settle, and the pictures are the newer
+  // thing -- they are what somebody opening the app tonight came back for.
+  // On a day nobody photographed there is nothing to compete with, and the
+  // events drift as they always have.
+  //
+  // Only the drift stops. A drag is something a person asked for, and it
+  // still works: with more than three events the rest are still reachable.
   const recentEventsRow = (
     <RecentEventsCarousel
       events={recentEvents}
       eventHues={eventHues}
       onSelectDay={openEventDay}
       today={today}
+      drift={todayPhotos.length === 0}
     />
   );
 
@@ -6087,25 +6124,6 @@ export default function App() {
       </div>
     );
   }
-
-  // Tonight's pictures, gathered across every event today rather than from
-  // one of them: a day with two outings is still one evening to anybody
-  // scrolling past, and two strips under one heading would say otherwise.
-  //
-  // Guarded on window.photos the same way the archive's strip is -- a browser
-  // still holding an older cached index.html has no photo shim, and this
-  // should quietly not appear rather than take the page down.
-  const todayPhotos =
-    today && window.photos
-      ? sortPhotos(
-          (dayEvents[today] || []).flatMap((ev) =>
-            (dayPhotos[photoGroup(today, ev.id)] || []).map((p) => ({
-              ...p,
-              eventId: ev.id,
-            }))
-          )
-        )
-      : [];
 
   // No heading over an empty strip, the same rule tomorrow's reminder
   // follows: on a day nobody photographed, a row saying "Ko smo se mel"
