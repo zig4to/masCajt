@@ -3365,17 +3365,66 @@ export default function App() {
     }
   }
 
+  // Every row an event owns, addressed by the day it sits on. It is the same
+  // list moveEventRows carries across, and that is not a coincidence: a row
+  // that has to travel with an event is a row that has to die with it.
+  function eventOwnedKeys(iso, eventId) {
+    const keys = [];
+    for (const kind of ["plan", "recap"]) {
+      for (const c of dayComments[commentGroup(iso, eventId, kind)] || []) {
+        keys.push(commentKey(iso, eventId, c.id, kind));
+      }
+    }
+    for (const p of dayPhotos[photoGroup(iso, eventId)] || []) {
+      keys.push(photoKey(iso, eventId, p.id));
+    }
+    for (const n of dayNeeds[needGroup(iso, eventId)] || []) {
+      keys.push(needKey(iso, eventId, n.id));
+    }
+    for (const c of dayCats[needGroup(iso, eventId)] || []) {
+      keys.push(categoryKey(iso, eventId, c.id));
+    }
+    return keys;
+  }
+
   async function deleteEvent(iso, id) {
+    // Read before the updates below empty the maps it reads from.
+    const owned = eventOwnedKeys(iso, id);
     setDayEvents((prev) => ({
       ...prev,
       [iso]: (prev[iso] || []).filter((e) => e.id !== id),
     }));
+    setDayComments((prev) =>
+      omitKey(omitKey(prev, commentGroup(iso, id, "plan")), commentGroup(iso, id, "recap"))
+    );
+    setDayPhotos((prev) => omitKey(prev, photoGroup(iso, id)));
+    setDayNeeds((prev) => omitKey(prev, needGroup(iso, id)));
+    setDayCats((prev) => omitKey(prev, needGroup(iso, id)));
     setEditingEvent(null);
     try {
       await window.storage.delete(eventKey(iso, id), true);
     } catch (e) {
       setError("Dogodka ni bilo mogoče izbrisati. Poskusi znova.");
       loadAllData();
+      return;
+    }
+    // The event row goes first, alone, because that is the part the press
+    // actually meant: once it is gone the card is gone for everyone.
+    //
+    // What follows is housekeeping. Left behind, these rows render nowhere --
+    // nothing looks them up without an event to hang them on -- but they sit
+    // inside the day range the window query asks for, so every device would
+    // go on fetching them on every load, for ever, for nothing.
+    //
+    // A failure here is a line in the console and nothing on screen. It
+    // leaves exactly what every delete before this one left, and there is
+    // nothing the person who pressed the button could do about it.
+    for (const key of owned) {
+      try {
+        await window.storage.delete(key, true);
+      } catch (e) {
+        console.info("Ostanka dogodka ni bilo mogoče pospraviti:", key, e?.message || e);
+      }
     }
   }
 
