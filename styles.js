@@ -1769,20 +1769,28 @@ export const styles = {
     borderRadius: 999,
     cursor: "pointer",
   }),
-  needTabAdd: {
+  // Says what it does until there is a tab on screen to say it instead.
+  // Alone on the row, a bare plus over an ordinary-looking list is a guess:
+  // the panel already has a plus, and that one adds a thing to the list. Once
+  // the first tab exists the strip explains the button, and the label would
+  // only be taking room from the tabs it has to share the row with.
+  needTabAdd: (labelled) => ({
     flexShrink: 0,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: 28,
+    gap: labelled ? 6 : 0,
     height: 28,
-    padding: 0,
+    width: labelled ? "auto" : 28,
+    padding: labelled ? "0 12px" : 0,
+    fontSize: 12,
+    fontWeight: 700,
     color: GREEN,
     background: "var(--card-bg)",
     border: `1px dashed ${GREEN}`,
     borderRadius: 999,
     cursor: "pointer",
-  },
+  }),
   // Capped and scrolling, for the same reason the comment list is: a long
   // list must not push the day off screen, and the box for the next item is
   // above it, so it stays in reach however far this scrolls.

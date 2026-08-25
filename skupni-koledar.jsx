@@ -4926,12 +4926,13 @@ export default function App() {
               </div>
             )}
             <button
-              style={styles.needTabAdd}
+              style={styles.needTabAdd(tabs.length <= 1)}
               onClick={() => openEditor(null)}
               aria-label="Dodaj kategorijo"
               title="Dodaj kategorijo"
             >
               <Plus size={14} />
+              {tabs.length <= 1 && "Dodaj kategorijo"}
             </button>
           </div>
         )}
