@@ -297,6 +297,31 @@ const THEME_CSS = `
       opacity: 0.9;
     }
   }
+
+  /* A fedora, worn by whoever is admin. Same 42x42 box as the sparkles, so
+     the brim can sit over the top of the 26px circle the way a hat would
+     rather than float above it. */
+  .bossChip {
+    position: relative;
+    overflow: visible;
+  }
+  .bossChip::before {
+    content: "";
+    position: absolute;
+    inset: -8px;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    /* Charcoal would disappear against the dark theme, and a light hat is
+       not a fedora, so the shape carries a pale rim instead. That reads as a
+       highlight on a light background and as the outline of the hat on a
+       dark one. The tilt is baked into the path rather than applied as a CSS
+       rotation, which would swing the hat around the chip's centre instead
+       of turning it where it sits. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 42 42'%3E%3Cg transform='translate(2 0) rotate(9 21 10.6)' stroke='%23c9d2da' stroke-width='0.7' stroke-linejoin='round'%3E%3Cpath d='M15.6 10.6L16.4 5.4Q17.1 3.7 18.8 4.1Q21 4.8 23.2 4.1Q24.9 3.7 25.6 5.4L26.4 10.6Z' fill='%232e353d'/%3E%3Cpath d='M15.9 7.6L26.1 7.6L26.25 9.5L15.75 9.5Z' fill='%236b7683' stroke='none'/%3E%3Cellipse cx='21' cy='10.7' rx='11.4' ry='2.7' fill='%232e353d'/%3E%3C/g%3E%3C/svg%3E");
+    /* Still. A hat that moved would read as being knocked about rather than
+       worn, and the sparkles opposite it are the thing that moves. */
+    pointer-events: none;
+  }
   /* Tonight's card on the event strip, breathing. Small enough to be caught
      at the edge of the eye rather than to pull it: the strip is something
      you glance at on the way past, and a card that insisted would be worse
@@ -1241,6 +1266,21 @@ export function hasSparkles(name) {
   return SPARKLE_NAMES.has((name || "").trim().toLowerCase());
 }
 
+// The hat goes on whoever is admin, not on a name -- admin is the one who can
+// edit anybody's entry, and nothing on screen said so until now. Tying it to
+// the role rather than to Žiga means it follows if the role ever moves.
+export function isBoss(name) {
+  return (name || "").trim().toLowerCase() === ADMIN_NAME;
+}
+
+// One decoration at a time, resolved in one place so the render sites do not
+// each grow a ladder of conditions.
+export function chipDecoration(name) {
+  if (hasSparkles(name)) return "sparkleChip";
+  if (isBoss(name)) return "bossChip";
+  return undefined;
+}
+
 const RESERVED_PERSON_COLORS = {
   "tina brdnik": "#D97AA0", // roza
   "jernej veber": "#B5651D", // temna oranzna
@@ -1753,7 +1793,7 @@ function PersonChip({ name, color, style, self }) {
   if (self) {
     return (
       <span
-        className={hasSparkles(name) ? "sparkleChip" : undefined}
+        className={chipDecoration(name)}
         style={{ ...styles.avatarChip(color), ...style }}
       >
         {initials(name)}
@@ -1765,7 +1805,7 @@ function PersonChip({ name, color, style, self }) {
     <>
       <span
         ref={chipRef}
-        className={hasSparkles(name) ? "sparkleChip" : undefined}
+        className={chipDecoration(name)}
         style={{ ...styles.avatarChip(color), ...style }}
         onClick={(e) => {
           // Or the tap would also reach the button that opens the day.
@@ -4492,7 +4532,7 @@ export default function App() {
             aria-label="Uredi ime"
           >
             <span
-              className={hasSparkles(name) ? "sparkleChip" : undefined}
+              className={chipDecoration(name)}
               style={styles.avatarChip(personColors[name] || GREEN)}
             >
               {initials(name)}
@@ -5050,7 +5090,7 @@ export default function App() {
                 </span>
                 <span style={styles.photoAlbumCaption}>
                   <span
-                    className={hasSparkles(author) ? "sparkleChip" : undefined}
+                    className={chipDecoration(author)}
                     style={styles.avatarChip(personColors[author] || GREEN)}
                   >
                     {initials(who)}
@@ -5779,7 +5819,7 @@ export default function App() {
                     return n === name ? (
                       <button
                         key={n}
-                        className={hasSparkles(n) ? "chipButton sparkleChip" : "chipButton"}
+                        className={["chipButton", chipDecoration(n)].filter(Boolean).join(" ")}
                         style={{
                           ...styles.avatarChipButton(personColors[n] || GREEN),
                           ...anim,
