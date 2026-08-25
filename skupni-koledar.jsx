@@ -128,6 +128,84 @@ const THEME_CSS = `
     outline-offset: 2px;
   }
 
+  /* The tick boxes on the "Kva rabmo" list. A native checkbox is drawn by
+     the operating system -- a grey Windows square, a blue Android tick, a
+     different thing again on a Mac -- and none of them belong to this app.
+     accent-color only recolours what the platform already decided to draw;
+     appearance: none takes the drawing back entirely.
+
+     It lives here rather than in styles.js because a box that fills in is
+     two states and a mark inside it, and neither :checked nor ::after can be
+     written as an inline style. */
+  .needCheck {
+    -webkit-appearance: none;
+    appearance: none;
+    position: relative;
+    flex-shrink: 0;
+    width: 19px;
+    height: 19px;
+    margin: 0;
+    background: var(--input-bg);
+    border: 1.5px solid var(--border-input);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 150ms ease, border-color 150ms ease,
+      transform 120ms ease;
+  }
+  .needCheck:hover {
+    border-color: var(--green);
+  }
+  /* Under the finger, not after it: on a phone there is no hover to say the
+     box is live, and this is the whole of the feedback before the row
+     re-sorts itself. */
+  .needCheck:active {
+    transform: scale(0.9);
+  }
+  .needCheck:checked {
+    background: var(--green);
+    border-color: var(--green);
+    animation: needCheckPop 200ms ease;
+  }
+  /* The tick itself: an empty box wearing two of its four borders, turned
+     through 45 degrees. Drawn rather than set in an image so it stays crisp
+     at any zoom, and so it costs no request. */
+  .needCheck:checked::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 46%;
+    width: 4.5px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    /* Centred first, then turned -- the other order would swing it out of
+       the box on its way round. */
+    transform: translate(-50%, -50%) rotate(45deg);
+  }
+  .needCheck:focus {
+    outline: none;
+  }
+  .needCheck:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 2px;
+  }
+  @keyframes needCheckPop {
+    0%   { transform: scale(0.85); }
+    55%  { transform: scale(1.1); }
+    100% { transform: scale(1); }
+  }
+  /* Asked for less motion: the box still fills in, it just stops springing
+     to get there. The colour change is the answer; the bounce was only ever
+     the flourish on it. */
+  @media (prefers-reduced-motion: reduce) {
+    @keyframes needCheckPop {
+      0%, 100% { transform: none; }
+    }
+    .needCheck:active {
+      transform: none;
+    }
+  }
+
   /* Attendee chips joining and leaving an event -- see chipAnimation() in
      styles.js, which picks between these and owns their durations. They live
      here because @keyframes cannot be expressed as an inline style. */
@@ -4977,7 +5055,7 @@ export default function App() {
                 <label style={styles.needLabel}>
                   <input
                     type="checkbox"
-                    style={styles.eventCheckbox}
+                    className="needCheck"
                     checked={!!need.by}
                     onChange={() => toggleNeed(iso, eventId, need.id)}
                   />
