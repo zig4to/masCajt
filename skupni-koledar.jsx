@@ -239,6 +239,64 @@ const THEME_CSS = `
       100% { opacity: 0; }
     }
   }
+
+  /* Sparkles, for the one name that has them. Drawn as pseudo-elements
+     rather than extra markup, so every place a chip already appears gets
+     them without a single render site learning about it. */
+  .sparkleChip {
+    position: relative;
+    /* The chip is a 26px circle and these sit outside it. Anything that
+       clipped its own overflow would shear them off. */
+    overflow: visible;
+  }
+  /* Two layers, each an SVG holding several stars, rather than one star per
+     pseudo-element -- there are only two to be had, and nine were wanted.
+     Drawing them into the image also means each one can be placed exactly,
+     including the few that sit on the circle's edge and overlap it.
+
+     The box is inset -8px on a 26px chip, so it is 42x42 -- which is the
+     viewBox the coordinates below are in. Change one and the other has to
+     follow. */
+  .sparkleChip::before,
+  .sparkleChip::after {
+    content: "";
+    position: absolute;
+    inset: -8px;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    /* Breathing, not travelling. The scale is applied to the whole layer, so
+       it is taken about the layer's centre and stars further out do shift a
+       little -- at this range the furthest moves about a pixel, which reads
+       as size rather than movement. A wider range is what made the earlier
+       version look like the sparkles were orbiting the chip. No rotation for
+       the same reason: a turning star reads as a moving star. */
+    animation: chipSparkle 2.4s ease-in-out infinite;
+    pointer-events: none;
+  }
+  /* The larger four, including one over the bottom-left of the circle. */
+  .sparkleChip::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 42 42'%3E%3Cg fill='%23ffc2e2'%3E%3Cpath d='M9 7.5Q9 11.5 13 11.5Q9 11.5 9 15.5Q9 11.5 5 11.5Q9 11.5 9 7.5Z'/%3E%3Cpath d='M35 9.5Q35 13 38.5 13Q35 13 35 16.5Q35 13 31.5 13Q35 13 35 9.5Z'/%3E%3Cpath d='M11 27Q11 31 15 31Q11 31 11 35Q11 31 7 31Q11 31 11 27Z'/%3E%3Cpath d='M28 1Q28 4 31 4Q28 4 28 7Q28 4 25 4Q28 4 28 1Z'/%3E%3C/g%3E%3C/svg%3E");
+  }
+  /* The smaller five, two of which sit on the circle's edge. Half a cycle
+     behind the larger set, so the two groups take turns rather than the
+     whole ring swelling at once. */
+  .sparkleChip::after {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 42 42'%3E%3Cg fill='%23ffd6ec'%3E%3Cpath d='M32 9.2Q32 12 34.8 12Q32 12 32 14.8Q32 12 29.2 12Q32 12 32 9.2Z'/%3E%3Cpath d='M33 28.6Q33 31 35.4 31Q33 31 33 33.4Q33 31 30.6 31Q33 31 33 28.6Z'/%3E%3Cpath d='M4 21.4Q4 24 6.6 24Q4 24 4 26.6Q4 24 1.4 24Q4 24 4 21.4Z'/%3E%3Cpath d='M8 14.8Q8 17 10.2 17Q8 17 8 19.2Q8 17 5.8 17Q8 17 8 14.8Z'/%3E%3Cpath d='M20 34.8Q20 37 22.2 37Q20 37 20 39.2Q20 37 17.8 37Q20 37 20 34.8Z'/%3E%3C/g%3E%3C/svg%3E");
+    animation-delay: 1.2s;
+  }
+  /* Narrow on purpose. The visible change is mostly the fade; the size shift
+     is small enough that a star never appears to leave where it sits. */
+  @keyframes chipSparkle {
+    0%, 100% { transform: scale(0.92); opacity: 0.55; }
+    50%      { transform: scale(1);    opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sparkleChip::before,
+    .sparkleChip::after {
+      animation: none;
+      opacity: 0.9;
+    }
+  }
   /* Tonight's card on the event strip, breathing. Small enough to be caught
      at the edge of the eye rather than to pull it: the strip is something
      you glance at on the way past, and a card that insisted would be worse
@@ -1174,6 +1232,15 @@ const PERSON_COLORS = [
 // These four chose theirs. Everyone after them is dealt one of what is left.
 // Keyed lowercase because that is the only thing about a stored name that is
 // reliably stable.
+// Purely decorative, and entirely on purpose. Keyed the same way as the
+// reserved colours below -- trimmed and lowercased -- so it survives someone
+// retyping their name with different capitalisation.
+const SPARKLE_NAMES = new Set(["tina brdnik"]);
+
+export function hasSparkles(name) {
+  return SPARKLE_NAMES.has((name || "").trim().toLowerCase());
+}
+
 const RESERVED_PERSON_COLORS = {
   "tina brdnik": "#D97AA0", // roza
   "jernej veber": "#B5651D", // temna oranzna
@@ -1684,13 +1751,21 @@ function PersonChip({ name, color, style, self }) {
   // you, and one tap cannot mean both "who is this" and "I am not coming" --
   // and you are the one person whose initials you already recognise.
   if (self) {
-    return <span style={{ ...styles.avatarChip(color), ...style }}>{initials(name)}</span>;
+    return (
+      <span
+        className={hasSparkles(name) ? "sparkleChip" : undefined}
+        style={{ ...styles.avatarChip(color), ...style }}
+      >
+        {initials(name)}
+      </span>
+    );
   }
 
   return (
     <>
       <span
         ref={chipRef}
+        className={hasSparkles(name) ? "sparkleChip" : undefined}
         style={{ ...styles.avatarChip(color), ...style }}
         onClick={(e) => {
           // Or the tap would also reach the button that opens the day.
@@ -4416,7 +4491,10 @@ export default function App() {
             }}
             aria-label="Uredi ime"
           >
-            <span style={styles.avatarChip(personColors[name] || GREEN)}>
+            <span
+              className={hasSparkles(name) ? "sparkleChip" : undefined}
+              style={styles.avatarChip(personColors[name] || GREEN)}
+            >
               {initials(name)}
             </span>
             <span style={styles.menuProfileName}>{name}</span>
@@ -4971,7 +5049,10 @@ export default function App() {
                   {more > 0 && <span style={styles.photoAlbumCount}>+{more}</span>}
                 </span>
                 <span style={styles.photoAlbumCaption}>
-                  <span style={styles.avatarChip(personColors[author] || GREEN)}>
+                  <span
+                    className={hasSparkles(author) ? "sparkleChip" : undefined}
+                    style={styles.avatarChip(personColors[author] || GREEN)}
+                  >
                     {initials(who)}
                   </span>
                   <span style={styles.photoAlbumName}>
@@ -5698,7 +5779,7 @@ export default function App() {
                     return n === name ? (
                       <button
                         key={n}
-                        className="chipButton"
+                        className={hasSparkles(n) ? "chipButton sparkleChip" : "chipButton"}
                         style={{
                           ...styles.avatarChipButton(personColors[n] || GREEN),
                           ...anim,
