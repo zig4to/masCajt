@@ -6155,13 +6155,19 @@ export default function App() {
   // under two names -- so this one stands in exactly when that one has
   // nothing to say.
   //
-  // The event itself is the soonest there is, taken from the same ordering
-  // the strip above is built from, so this card is always the strip's
-  // leftmost one spelled out. Today's counts: a day is the finest grain
-  // anything here works at, so tonight's outing is still the next one until
-  // midnight.
+  // Strictly after today, never today itself. Tonight's outing is not news
+  // to anybody looking at this page: it is the first card in the strip, it
+  // has its own day card below, and its pictures may be sitting right above
+  // this heading. What "naslednji" is being asked is what comes once today
+  // is over. Dates are ISO, so a string compare is a date compare.
+  //
+  // Beyond that it is the soonest there is, off the same ordering the strip
+  // is built from. Nothing after today means no heading: there is no next
+  // event to name.
   const nextEvent =
-    (dayEvents[tomorrowIso] || []).length === 0 ? recentEvents[0] || null : null;
+    (dayEvents[tomorrowIso] || []).length === 0
+      ? recentEvents.find((ev) => ev._iso > today) || null
+      : null;
 
   const nextEventSection = nextEvent && (
     <>
