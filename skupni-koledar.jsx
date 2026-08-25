@@ -36,6 +36,7 @@ import {
   Moon,
   Plus,
   Star,
+  X,
 } from "lucide-react";
 import {
   styles,
@@ -771,7 +772,7 @@ export function parseNeedPerson(person) {
 // stored -- the list is what the group needs, not a record of who thought of
 // what, and a name against every line would read as an assignment.
 export function encodeNeed(need) {
-  return JSON.stringify({ text: need.text, by: need.by || "" });
+  return JSON.stringify({ text: need.text, by: need.by || "", cat: need.cat || "" });
 }
 
 export function decodeNeed(raw, id) {
@@ -782,6 +783,10 @@ export function decodeNeed(raw, id) {
       id,
       text: parsed.text,
       by: typeof parsed.by === "string" ? parsed.by : "",
+      // Which tab it is filed under, "" for none. Everything written before
+      // categories existed decodes to "", which is exactly where it belongs:
+      // the unfiled tab.
+      cat: typeof parsed.cat === "string" ? parsed.cat : "",
     };
   } catch (e) {
     return null;
@@ -798,6 +803,64 @@ export function sortNeeds(list) {
       Number(a.id) - Number(b.id) ||
       a.id.localeCompare(b.id)
   );
+}
+
+// A tab on that list -- "Hrana", "Pijača", "Za na plažo". Rows of their own
+// rather than a field on the event, for the same reason the items are: two
+// people naming a tab at once must not overwrite each other. They also have
+// to exist while still empty, which a list derived from the items could
+// never do -- making a tab and then filling it is the whole gesture.
+const CATEGORY_MARKER = "__cat__";
+
+export function categoryKey(iso, eventId, catId) {
+  return `avail:${iso}:${CATEGORY_MARKER}${eventId}:${catId}`;
+}
+
+export function parseCategoryPerson(person) {
+  const parsed = parseMarkedPerson(person, CATEGORY_MARKER);
+  return parsed && { eventId: parsed.ownerId, catId: parsed.itemId };
+}
+
+export function encodeCategory(cat) {
+  return JSON.stringify({ name: cat.name });
+}
+
+export function decodeCategory(raw, id) {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.name !== "string" || !parsed.name.trim()) return null;
+    return { id, name: parsed.name };
+  } catch (e) {
+    return null;
+  }
+}
+
+// The order they were made, and it never changes: a strip that reshuffled
+// itself would move the tab under a thumb already on its way down.
+export function sortCategories(list) {
+  return [...list].sort((a, b) => Number(a.id) - Number(b.id) || a.id.localeCompare(b.id));
+}
+
+// What the strip shows, left to right. The unnamed tab at the front is where
+// everything nobody filed lives -- items written before there were any tabs,
+// and anything added while that tab was the one open. It earns its place by
+// holding something; on a list that has no tabs at all it is the list, and
+// the strip shows nothing but the button that starts one.
+export const LOOSE_TAB = { id: "", name: "Splošno" };
+
+export function needTabs(needs, cats) {
+  const named = sortCategories(cats);
+  if (named.length === 0) return [LOOSE_TAB];
+  return needs.some((n) => !n.cat) ? [LOOSE_TAB, ...named] : named;
+}
+
+// Which tab is open, given what somebody chose and what is actually there.
+// A choice can outlive its tab -- somebody else deletes it while you have it
+// open -- and falling back to the first tab is what stops the panel coming
+// up empty with no way to tell why.
+export function activeTabId(chosen, tabs) {
+  if (chosen != null && tabs.some((t) => t.id === chosen)) return chosen;
+  return tabs.length ? tabs[0].id : "";
 }
 
 // Straight off a phone a photo is 3-5 MB, and every archive view pulls all of
@@ -1197,6 +1260,10 @@ const CHANGELOG = [
       "Kva rabmo: seznam stvari za dogodek, poleg komentarjev na kartici",
       "Na seznam lahko doda kdorkoli, in kdorkoli označi, da stvar prinese",
       "Označena stvar se prečrta, gre na dno in pove, kdo jo prinese",
+      "Stvar s seznama lahko kdorkoli tudi izbriše",
+      "Seznam se da razdeliti na kategorije; vsaka ima svoj seznam",
+      "Kategorije so zavihki na vrhu seznama; ko jih je več, se drsajo v levo",
+      "Pritisk na odprt zavihek ga preimenuje ali izbriše; stvari gredo nazaj v Splošno",
       "Seznam vklopiš pri dogodku pod «Več možnosti»",
     ],
   },
@@ -2001,6 +2068,8 @@ export default function App() {
   const [dayPhotos, setDayPhotos] = useState({});
   // "Kva rabmo" per event, keyed the same way: "iso:eventId" -> [need]
   const [dayNeeds, setDayNeeds] = useState({});
+  // That list's tabs, same key again: "iso:eventId" -> [category]
+  const [dayCats, setDayCats] = useState({});
   // How many uploads are still in flight per event, so the strip can show
   // placeholders. A count and not a boolean: several files can be picked at
   // once and each finishes on its own.
@@ -2027,6 +2096,14 @@ export default function App() {
   // what to bring and the thread is where somebody says they cannot.
   const [openNeeds, setOpenNeeds] = useState(null);
   const [needDrafts, setNeedDrafts] = useState({});
+  // Which tab is open per list, and what is half-typed into each. Not stored
+  // anywhere: which tab you are looking at is yours, and pushing it to
+  // everyone else's screen would drag them off whatever they were reading.
+  const [activeCats, setActiveCats] = useState({});
+  // The one tab being named, as { group, catId } -- catId null while it is a
+  // tab that does not exist yet. Only ever one, since it takes over the strip.
+  const [catEditor, setCatEditor] = useState(null);
+  const [catNameDraft, setCatNameDraft] = useState("");
   const [chipAnim, setChipAnim] = useState({});
   // Names already gone from an event's attendees but still on screen playing
   // their exit: "iso:eventId" -> [person]. Same lifetime as the "out" flag
@@ -2208,6 +2285,7 @@ export default function App() {
       const comments = {};
       const photos = {};
       const needs = {};
+      const cats = {};
       const covers = {};
       for (const iso of days) {
         result[iso] = {};
@@ -2241,6 +2319,15 @@ export default function App() {
           if (need) {
             const group = needGroup(iso, parsed.eventId);
             (needs[group] = needs[group] || []).push(need);
+          }
+          continue;
+        }
+        if (person.startsWith(CATEGORY_MARKER)) {
+          const parsed = parseCategoryPerson(person);
+          const cat = parsed && decodeCategory(row.value, parsed.catId);
+          if (cat) {
+            const group = needGroup(iso, parsed.eventId);
+            (cats[group] = cats[group] || []).push(cat);
           }
           continue;
         }
@@ -2292,6 +2379,9 @@ export default function App() {
       for (const group of Object.keys(needs)) {
         needs[group] = sortNeeds(needs[group]);
       }
+      for (const group of Object.keys(cats)) {
+        cats[group] = sortCategories(cats[group]);
+      }
       setDayData(result);
       // Merged, not replaced. The archive keeps its events and threads in
       // these same maps, and refreshing the visible window must not throw
@@ -2323,6 +2413,14 @@ export default function App() {
           if (!(iso in result)) kept[group] = list;
         }
         return { ...kept, ...needs };
+      });
+      setDayCats((prev) => {
+        const kept = {};
+        for (const [group, list] of Object.entries(prev)) {
+          const iso = group.slice(0, group.indexOf(":"));
+          if (!(iso in result)) kept[group] = list;
+        }
+        return { ...kept, ...cats };
       });
       setMonthCovers((prev) => ({ ...prev, ...covers }));
       setError(null);
@@ -2533,6 +2631,25 @@ export default function App() {
                 ? list.map((c) => (c.id === comment.id ? comment : c))
                 : [...list, comment];
               return { ...prev, [group]: sortComments(next) };
+            });
+            return;
+          }
+
+          if (person.startsWith(CATEGORY_MARKER)) {
+            const parsed = parseCategoryPerson(person);
+            if (!parsed) return;
+            const group = needGroup(iso, parsed.eventId);
+            setDayCats((prev) => {
+              const list = prev[group] || [];
+              if (type === "DELETE") {
+                return { ...prev, [group]: list.filter((c) => c.id !== parsed.catId) };
+              }
+              const cat = decodeCategory(value, parsed.catId);
+              if (!cat) return prev;
+              const next = list.some((c) => c.id === cat.id)
+                ? list.map((c) => (c.id === cat.id ? cat : c))
+                : [...list, cat];
+              return { ...prev, [group]: sortCategories(next) };
             });
             return;
           }
@@ -3034,6 +3151,7 @@ export default function App() {
     }));
     const photos = dayPhotos[photoGroup(fromIso, event.id)] || [];
     const needs = dayNeeds[needGroup(fromIso, event.id)] || [];
+    const cats = dayCats[needGroup(fromIso, event.id)] || [];
 
     await window.storage.set(eventKey(toIso, event.id), encodeEvent(event), true);
     for (const { kind, list } of threads) {
@@ -3051,6 +3169,13 @@ export default function App() {
     for (const n of needs) {
       await window.storage.set(needKey(toIso, event.id, n.id), encodeNeed(n), true);
     }
+    for (const c of cats) {
+      await window.storage.set(
+        categoryKey(toIso, event.id, c.id),
+        encodeCategory(c),
+        true
+      );
+    }
 
     await window.storage.delete(eventKey(fromIso, event.id), true);
     for (const { kind, list } of threads) {
@@ -3063,6 +3188,9 @@ export default function App() {
     }
     for (const n of needs) {
       await window.storage.delete(needKey(fromIso, event.id, n.id), true);
+    }
+    for (const c of cats) {
+      await window.storage.delete(categoryKey(fromIso, event.id, c.id), true);
     }
 
     // The local copies follow, so the move shows without a reload.
@@ -3084,6 +3212,12 @@ export default function App() {
       const next = { ...prev };
       delete next[needGroup(fromIso, event.id)];
       if (needs.length) next[needGroup(toIso, event.id)] = needs;
+      return next;
+    });
+    setDayCats((prev) => {
+      const next = { ...prev };
+      delete next[needGroup(fromIso, event.id)];
+      if (cats.length) next[needGroup(toIso, event.id)] = cats;
       return next;
     });
   }
@@ -3222,12 +3356,14 @@ export default function App() {
   }
 
   // Anyone can put something on the list -- that is the point of it. The row
-  // carries no author, so nothing here records who typed it.
-  async function addNeed(iso, eventId) {
+  // carries no author, so nothing here records who typed it. It does carry
+  // the tab that was open when it was written, which is the only place a
+  // person can have meant to put it.
+  async function addNeed(iso, eventId, cat = "") {
     const group = needGroup(iso, eventId);
     const text = (needDrafts[group] || "").trim();
     if (!text || !name) return;
-    const need = { id: String(Date.now()), text, by: "" };
+    const need = { id: String(Date.now()), text, by: "", cat };
     setDayNeeds((prev) => ({
       ...prev,
       [group]: sortNeeds([...(prev[group] || []), need]),
@@ -3258,6 +3394,89 @@ export default function App() {
       await window.storage.set(needKey(iso, eventId, needId), encodeNeed(next), true);
     } catch (e) {
       setError("Stvari ni bilo mogoče označiti. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
+  // A tab, named at the moment it is made: an unnamed one would be a tab
+  // nobody could tell from the next. It opens as soon as it exists, because
+  // making one is how somebody says where the next few items are going.
+  async function addCategory(iso, eventId) {
+    const group = needGroup(iso, eventId);
+    const catName = catNameDraft.trim();
+    if (!catName || !name) return;
+    const cat = { id: String(Date.now()), name: catName };
+    setDayCats((prev) => ({
+      ...prev,
+      [group]: sortCategories([...(prev[group] || []), cat]),
+    }));
+    setActiveCats((prev) => ({ ...prev, [group]: cat.id }));
+    setCatEditor(null);
+    setCatNameDraft("");
+    try {
+      await window.storage.set(
+        categoryKey(iso, eventId, cat.id),
+        encodeCategory(cat),
+        true
+      );
+    } catch (e) {
+      setError("Kategorije ni bilo mogoče dodati. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
+  async function renameCategory(iso, eventId, catId) {
+    const group = needGroup(iso, eventId);
+    const catName = catNameDraft.trim();
+    const existing = (dayCats[group] || []).find((c) => c.id === catId);
+    if (!catName || !existing || !name) return;
+    const cat = { ...existing, name: catName };
+    setDayCats((prev) => ({
+      ...prev,
+      [group]: (prev[group] || []).map((c) => (c.id === catId ? cat : c)),
+    }));
+    setCatEditor(null);
+    setCatNameDraft("");
+    try {
+      await window.storage.set(categoryKey(iso, eventId, catId), encodeCategory(cat), true);
+    } catch (e) {
+      setError("Kategorije ni bilo mogoče preimenovati. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
+  // Removing a tab must not take the things filed under it with it. Nobody
+  // pressing this is saying "and throw away the six items inside" -- so they
+  // come back out to the unfiled tab, where they are visible and can be
+  // filed again or binned one at a time.
+  async function deleteCategory(iso, eventId, catId) {
+    const group = needGroup(iso, eventId);
+    const orphans = (dayNeeds[group] || [])
+      .filter((n) => n.cat === catId)
+      .map((n) => ({ ...n, cat: "" }));
+    setDayCats((prev) => ({
+      ...prev,
+      [group]: (prev[group] || []).filter((c) => c.id !== catId),
+    }));
+    setDayNeeds((prev) => ({
+      ...prev,
+      [group]: sortNeeds(
+        (prev[group] || []).map((n) => (n.cat === catId ? { ...n, cat: "" } : n))
+      ),
+    }));
+    setActiveCats((prev) => omitKey(prev, group));
+    setCatEditor(null);
+    setCatNameDraft("");
+    try {
+      // The items first. Interrupted the other way round, the tab would be
+      // gone while its contents still pointed at it -- present in no tab at
+      // all, which is the one outcome nobody could put right from the screen.
+      for (const n of orphans) {
+        await window.storage.set(needKey(iso, eventId, n.id), encodeNeed(n), true);
+      }
+      await window.storage.delete(categoryKey(iso, eventId, catId), true);
+    } catch (e) {
+      setError("Kategorije ni bilo mogoče izbrisati. Poskusi znova.");
       loadAllData();
     }
   }
@@ -4600,9 +4819,122 @@ export default function App() {
   function renderNeedsPanel(iso, eventId) {
     const group = needGroup(iso, eventId);
     const needs = dayNeeds[group] || [];
+    const cats = dayCats[group] || [];
     const draft = needDrafts[group] || "";
+    const tabs = needTabs(needs, cats);
+    const active = activeTabId(activeCats[group], tabs);
+    // What this tab holds. The unfiled tab takes everything with no tab of
+    // its own, including rows written before any of this existed.
+    const shown = needs.filter((n) => (n.cat || "") === active);
+    const editing = catEditor && catEditor.group === group ? catEditor : null;
+
+    function openEditor(catId) {
+      setCatEditor({ group, catId });
+      setCatNameDraft(catId ? cats.find((c) => c.id === catId)?.name || "" : "");
+    }
+
+    function closeEditor() {
+      setCatEditor(null);
+      setCatNameDraft("");
+    }
+
+    function commitEditor() {
+      if (!catNameDraft.trim()) return;
+      if (editing.catId) renameCategory(iso, eventId, editing.catId);
+      else addCategory(iso, eventId);
+    }
+
     return (
       <div style={styles.commentsPanel}>
+        {/* The tabs, and the button that starts one. Naming takes the whole
+            strip rather than turning one tab into a field: the strip
+            scrolls, and a field that had to be scrolled back to would be a
+            field somebody typed into blind. */}
+        {editing ? (
+          <div style={styles.commentForm}>
+            <input
+              autoFocus
+              style={styles.commentInput}
+              placeholder="Ime kategorije"
+              value={catNameDraft}
+              onChange={(e) => setCatNameDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitEditor();
+                if (e.key === "Escape") closeEditor();
+              }}
+            />
+            {/* Only on a tab that exists. There is nothing to delete while
+                the name is still being typed for the first time, and
+                "Prekliči" is what that state needs instead. */}
+            {editing.catId && (
+              <button
+                style={styles.commentDelete}
+                onClick={() => deleteCategory(iso, eventId, editing.catId)}
+                aria-label="Izbriši kategorijo"
+                title="Izbriši kategorijo; stvari gredo nazaj v Splošno"
+              >
+                <Trash2 size={13} />
+              </button>
+            )}
+            <button
+              style={{ ...styles.needAddButton, opacity: catNameDraft.trim() ? 1 : 0.5 }}
+              disabled={!catNameDraft.trim()}
+              onClick={commitEditor}
+              aria-label="Shrani kategorijo"
+              title="Shrani kategorijo"
+            >
+              <Check size={16} />
+            </button>
+            <button
+              style={styles.commentDelete}
+              onClick={closeEditor}
+              aria-label="Prekliči"
+              title="Prekliči"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <div style={styles.needTabsRow}>
+            {/* One tab on its own is the list itself, not a choice between
+                anything, so the strip is just the button that makes the
+                first real one. */}
+            {tabs.length > 1 && (
+              <div style={styles.needTabsStrip}>
+                {tabs.map((tab) => {
+                  const on = tab.id === active;
+                  return (
+                    <button
+                      key={tab.id || "__loose__"}
+                      style={styles.needTab(on)}
+                      // A second press on the tab you are already on opens
+                      // its name, which is also the only door to deleting
+                      // it. The unfiled tab has no row behind it and so no
+                      // name to change.
+                      onClick={() =>
+                        on && tab.id
+                          ? openEditor(tab.id)
+                          : setActiveCats((prev) => ({ ...prev, [group]: tab.id }))
+                      }
+                      aria-pressed={on}
+                    >
+                      {tab.name}
+                      {on && tab.id && <Pencil size={11} style={{ opacity: 0.75 }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <button
+              style={styles.needTabAdd}
+              onClick={() => openEditor(null)}
+              aria-label="Dodaj kategorijo"
+              title="Dodaj kategorijo"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
+        )}
         {/* The box for the next thing sits above the list rather than below
             it, the other way round from the comment thread. A thread is read
             downwards and answered at the end; this is a list being filled,
@@ -4616,7 +4948,7 @@ export default function App() {
             onChange={(e) =>
               setNeedDrafts((prev) => ({ ...prev, [group]: e.target.value }))
             }
-            onKeyDown={(e) => e.key === "Enter" && addNeed(iso, eventId)}
+            onKeyDown={(e) => e.key === "Enter" && addNeed(iso, eventId, active)}
           />
           <button
             style={{
@@ -4624,18 +4956,18 @@ export default function App() {
               opacity: draft.trim() ? 1 : 0.5,
             }}
             disabled={!draft.trim()}
-            onClick={() => addNeed(iso, eventId)}
+            onClick={() => addNeed(iso, eventId, active)}
             aria-label="Dodaj na seznam"
             title="Dodaj na seznam"
           >
             <Plus size={16} />
           </button>
         </div>
-        {needs.length === 0 ? (
+        {shown.length === 0 ? (
           <div style={styles.commentsEmpty}>Seznam je še prazen.</div>
         ) : (
           <div style={styles.needsList}>
-            {needs.map((need) => (
+            {shown.map((need) => (
               <div key={need.id} style={styles.needRow}>
                 {/* A real label around a real checkbox, so the text and the
                     slack beside it tick the line too -- the same trick the

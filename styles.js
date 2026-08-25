@@ -1728,6 +1728,61 @@ export const styles = {
     borderRadius: 9,
     cursor: "pointer",
   },
+  // The tab strip and the button that adds to it. The button is outside the
+  // scrolling part on purpose: scrolled away with the tabs, the one control
+  // that makes a new one would be the hardest thing on the panel to reach
+  // once there were enough tabs to need scrolling at all.
+  needTabsRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  needTabsStrip: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    overflowX: "auto",
+    // Room under the tabs for the scrollbar a desktop browser puts there,
+    // so it lies beneath them rather than across their bottom edge.
+    paddingBottom: 4,
+    WebkitOverflowScrolling: "touch",
+  },
+  // Never squeezed: a strip of six tabs is meant to run off the edge and be
+  // dragged, not to shrink each name until none of them can be read.
+  needTab: (on) => ({
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 5,
+    maxWidth: 160,
+    padding: "5px 11px",
+    fontSize: 12,
+    fontWeight: 700,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    color: on ? "#fff" : "var(--text-secondary)",
+    background: on ? GREEN : "var(--card-bg)",
+    border: `1px solid ${on ? GREEN : "var(--border)"}`,
+    borderRadius: 999,
+    cursor: "pointer",
+  }),
+  needTabAdd: {
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 28,
+    height: 28,
+    padding: 0,
+    color: GREEN,
+    background: "var(--card-bg)",
+    border: `1px dashed ${GREEN}`,
+    borderRadius: 999,
+    cursor: "pointer",
+  },
   // Capped and scrolling, for the same reason the comment list is: a long
   // list must not push the day off screen, and the box for the next item is
   // above it, so it stays in reach however far this scrolls.
