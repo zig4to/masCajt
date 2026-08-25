@@ -821,7 +821,7 @@ export function commentStamp(id) {
   const day = part("day");
   const month = part("month");
   if (!hour || !minute || !day || !month) return "";
-  return `${hour}:${minute} · ${day}. ${month}.`;
+  return `${hour}:${minute} – ${day}. ${month}.`;
 }
 
 export function encodeComment(comment) {
