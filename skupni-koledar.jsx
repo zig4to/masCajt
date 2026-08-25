@@ -1338,9 +1338,12 @@ function archiveSlabLower(upper) {
     : `${monthOf(upper)}-01`;
 }
 
-// Days the home list shows before it stops. The window behind it is still
-// the full fourteen -- this only decides how much of it is on screen, so
-// nothing about loading, the event strip or the archive changes.
+// Days the home list shows before it stops. A week: far enough to answer
+// "are you free this weekend" and short enough that the page still ends
+// somewhere. The window behind it is still the full fourteen -- this only
+// decides how much of it is on screen, so nothing about loading, the event
+// strip or the archive changes, and the button below the list still reaches
+// the rest.
 // Hand-kept, newest day first. Written from the commit log but not out of
 // it: a commit says what changed in the code, and this has to say what
 // changed for someone opening the calendar. There is no build step here to
@@ -1350,6 +1353,7 @@ const CHANGELOG = [
   {
     date: "2026-08-25",
     items: [
+      "Domača stran kaže teden dni; ostale odpre gumb na dnu",
       "«Ko smo se mel dons»: slike današnjega dogodka drsijo na domači strani",
       "Slika iz tega traku se odpre na cel zaslon, listaš pa čez cel večer",
       "Kva rabmo: seznam stvari za dogodek, poleg komentarjev na kartici",
@@ -1416,7 +1420,7 @@ const CHANGELOG = [
   },
 ];
 
-const DAYS_SHOWN = 10;
+const DAYS_SHOWN = 7;
 
 // Below this the gesture reads as a tap or a stray wobble, not a swipe, and
 // the strip springs back to where it was.
