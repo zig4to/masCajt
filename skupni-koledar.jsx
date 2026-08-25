@@ -5338,8 +5338,12 @@ export default function App() {
   // `reminder` marks the copy drawn under "Ne pozabi, jutri gremo". Tomorrow
   // is on screen twice at once -- there and inside its own day card -- and
   // only one of those is a place to work from.
-  function renderEventSection(iso, { reminder = false } = {}) {
-    const events = dayEvents[iso] || [];
+  // `onlyId` narrows the day to a single event. "Naslednji dogodek" needs it:
+  // it stands for one event, and the day that event falls on may hold others
+  // that are not the one being pointed at.
+  function renderEventSection(iso, { reminder = false, onlyId = null } = {}) {
+    const dayList = dayEvents[iso] || [];
+    const events = onlyId != null ? dayList.filter((e) => e.id === onlyId) : dayList;
     // Never the reminder copy. It carries no edit button of its own, but the
     // form is opened by the day below rather than by the card that shows it,
     // so without this, editing tomorrow's event turned the reminder into a
@@ -6146,6 +6150,32 @@ export default function App() {
   // tomorrow, and only when there is something: a heading over nothing would
   // be a standing reminder of no plans.
   const tomorrowIso = addDays(today, 1);
+  // Only when tomorrow is empty. With something on tomorrow, the heading
+  // below already carries that card, and the two would be the same event
+  // under two names -- so this one stands in exactly when that one has
+  // nothing to say.
+  //
+  // The event itself is the soonest there is, taken from the same ordering
+  // the strip above is built from, so this card is always the strip's
+  // leftmost one spelled out. Today's counts: a day is the finest grain
+  // anything here works at, so tonight's outing is still the next one until
+  // midnight.
+  const nextEvent =
+    (dayEvents[tomorrowIso] || []).length === 0 ? recentEvents[0] || null : null;
+
+  const nextEventSection = nextEvent && (
+    <>
+      <div style={styles.recentEventsHeading}>Naslednji dogodek</div>
+      <div style={styles.tomorrowCards}>
+        {/* reminder: true for the same reason tomorrow's copy carries it --
+            this is a card to read, not a place to work from. Editing belongs
+            to the day itself, which is a tap away and is where the form would
+            open anyway. */}
+        {renderEventSection(nextEvent._iso, { reminder: true, onlyId: nextEvent.id })}
+      </div>
+    </>
+  );
+
   const tomorrowReminder = (dayEvents[tomorrowIso] || []).length > 0 && (
     <>
       <div style={styles.recentEventsHeading}>Ne pozabi, jutri gremo</div>
@@ -6178,6 +6208,8 @@ export default function App() {
           {recentEventsRow}
 
           {todayPhotoStrip}
+
+          {nextEventSection}
 
           {tomorrowReminder}
 
@@ -6481,6 +6513,8 @@ export default function App() {
       {recentEventsRow}
 
       {todayPhotoStrip}
+
+      {nextEventSection}
 
       {tomorrowReminder}
 
