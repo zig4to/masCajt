@@ -4929,9 +4929,14 @@ export default function App() {
             style={styles.commentsToggle}
             onClick={() => setOpenComments(open ? null : key)}
             aria-expanded={open}
+            // The word is gone from the face of the button, so it has to be
+            // said here instead: a speech reader would otherwise reach a
+            // control announced as nothing but a number in brackets.
+            aria-label={`Komentarji (${comments.length})`}
+            title="Komentarji"
           >
             <MessageSquare size={12} />
-            {comments.length > 0 ? `Komentarji (${comments.length})` : "Komentiraj"}
+            {`(${comments.length})`}
             <ChevronRight
               size={14}
               style={{
