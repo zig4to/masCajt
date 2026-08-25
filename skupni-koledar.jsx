@@ -310,13 +310,26 @@ const THEME_CSS = `
     inset: -8px;
     background-repeat: no-repeat;
     background-size: 100% 100%;
-    /* Charcoal would disappear against the dark theme, and a light hat is
-       not a fedora, so the shape carries a pale rim instead. That reads as a
-       highlight on a light background and as the outline of the hat on a
-       dark one. The tilt is baked into the path rather than applied as a CSS
-       rotation, which would swing the hat around the chip's centre instead
-       of turning it where it sits. */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 42 42'%3E%3Cg transform='translate(2 0) rotate(9 21 10.6)' stroke='%23c9d2da' stroke-width='0.7' stroke-linejoin='round'%3E%3Cpath d='M15.6 10.6L16.4 5.4Q17.1 3.7 18.8 4.1Q21 4.8 23.2 4.1Q24.9 3.7 25.6 5.4L26.4 10.6Z' fill='%232e353d'/%3E%3Cpath d='M15.9 7.6L26.1 7.6L26.25 9.5L15.75 9.5Z' fill='%236b7683' stroke='none'/%3E%3Cellipse cx='21' cy='10.7' rx='11.4' ry='2.7' fill='%232e353d'/%3E%3C/g%3E%3C/svg%3E");
+    /* A men's straw hat -- Panama shape, so the crown keeps its crease and
+       the brim stays structured rather than floppy.
+
+       Drawn flat, as a straight side elevation. The first attempt gave the
+       brim an ellipse, which is a view from below, while the crown stayed
+       face-on: two viewpoints in one object, and the brim ended up sweeping
+       across the face instead of sitting on top of it. A flat brim has no
+       perspective left to contradict, and matches the flat circles and stars
+       it sits among.
+
+       Straw is pale, the opposite problem the charcoal fedora had: it holds
+       up on the dark theme and washes out on the light one, so the rim is a
+       darker tan rather than a pale grey. The band sits above the brim's top
+       edge on purpose -- any lower and the brim hides it, which is what
+       happened to the fedora's.
+
+       The tilt is baked into the path rather than applied as a CSS rotation,
+       which would swing the hat around the chip's centre instead of turning
+       it where it sits. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 42 42'%3E%3Cg transform='translate(2 0) rotate(9 21 10.3)' stroke='%23a8813c' stroke-width='0.7' stroke-linejoin='round'%3E%3Cpath d='M14.2 9.2L14.95 3.6Q15.7 1.9 17.6 2.3Q21 3.1 24.4 2.3Q26.3 1.9 27.05 3.6L27.8 9.2Z' fill='%23e0c07a'/%3E%3Cpath d='M14.25 6.4L27.75 6.4L27.8 9.1L14.2 9.1Z' fill='%233b342e' stroke='none'/%3E%3Crect x='8.6' y='9' width='24.8' height='2.7' rx='1.35' fill='%23e0c07a'/%3E%3C/g%3E%3C/svg%3E");
     /* Still. A hat that moved would read as being knocked about rather than
        worn, and the sparkles opposite it are the thing that moves. */
     pointer-events: none;
