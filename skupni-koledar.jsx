@@ -3635,8 +3635,11 @@ export default function App() {
     }
   }
 
-  // Only what you wrote. Same rule the events already follow, and the one
-  // place a stray tap would destroy something nobody can get back.
+  // What you wrote, and -- for the admin -- what anyone wrote. Same rule the
+  // events already follow. It stays the one place a stray tap destroys
+  // something nobody can get back, which is why the button only appears on
+  // rows its presser is actually allowed to remove rather than reporting the
+  // refusal afterwards.
   async function deleteComment(iso, eventId, commentId, kind = "plan") {
     const group = commentGroup(iso, eventId, kind);
     setDayComments((prev) => ({
@@ -4869,12 +4872,25 @@ export default function App() {
                   <div style={styles.commentAuthor}>{c.author}</div>
                   <div style={styles.commentText}>{c.text}</div>
                 </div>
-                {c.author === name && (
+                {/* Yours, or anyone's if you are the admin -- the same
+                    reach they already have over anyone's event and anyone's
+                    availability entry. The label says whose it is: deleting
+                    somebody else's words is a different act from taking back
+                    your own, and the button should not pretend otherwise. */}
+                {(c.author === name || isAdmin) && (
                   <button
                     style={styles.commentDelete}
                     onClick={() => deleteComment(iso, eventId, c.id, kind)}
-                    aria-label="Izbriši komentar"
-                    title="Izbriši komentar"
+                    aria-label={
+                      c.author === name
+                        ? "Izbriši komentar"
+                        : `Izbriši komentar (${c.author})`
+                    }
+                    title={
+                      c.author === name
+                        ? "Izbriši komentar"
+                        : `Izbriši komentar, ki ga je napisal ${c.author}`
+                    }
                   >
                     <Trash2 size={12} />
                   </button>
