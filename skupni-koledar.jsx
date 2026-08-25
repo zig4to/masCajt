@@ -4985,7 +4985,7 @@ export default function App() {
                 </label>
                 {need.by && (
                   <span style={styles.needBy}>
-                    <span style={styles.needByLabel}>Prinesel:</span>
+                    <span style={styles.needByLabel}>Prinese:</span>
                     <PersonChip
                       name={need.by}
                       color={personColors[need.by] || GREEN}

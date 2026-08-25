@@ -1820,7 +1820,7 @@ export const styles = {
   },
   // Struck through and faded once somebody has it, so the half of the list
   // still to sort out is what the eye lands on. It keeps the row's slack,
-  // which is what holds "Prinesel:" against the right-hand edge.
+  // which is what holds "Prinese:" against the right-hand edge.
   needText: (done) => ({
     flex: 1,
     minWidth: 0,
