@@ -1742,7 +1742,17 @@ export const styles = {
     display: "flex",
     alignItems: "center",
     gap: 8,
-    padding: "5px 0",
+    padding: "3px 0",
+  },
+  // Takes the row's slack, so what is tickable is the checkbox, the text and
+  // the gap after it -- everything up to whoever is bringing it. The bin sits
+  // outside, where a thumb aiming for it cannot tick the line by mistake.
+  needLabel: {
+    flex: 1,
+    minWidth: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
     cursor: "pointer",
   },
   // Struck through and faded once somebody has it, so the half of the list

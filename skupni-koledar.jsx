@@ -3262,6 +3262,25 @@ export default function App() {
     }
   }
 
+  // Open to everyone, unlike a comment. A comment is something a person
+  // said and only they may take it back; a line on this list is a note the
+  // group left itself, and the one who spots that it is wrong is rarely the
+  // one who typed it. Nothing is lost that cannot be typed again in a
+  // second, which is also why there is no "are you sure" in the way.
+  async function deleteNeed(iso, eventId, needId) {
+    const group = needGroup(iso, eventId);
+    setDayNeeds((prev) => ({
+      ...prev,
+      [group]: (prev[group] || []).filter((n) => n.id !== needId),
+    }));
+    try {
+      await window.storage.delete(needKey(iso, eventId, needId), true);
+    } catch (e) {
+      setError("Stvari ni bilo mogoče izbrisati. Poskusi znova.");
+      loadAllData();
+    }
+  }
+
   // Only what you wrote. Same rule the events already follow, and the one
   // place a stray tap would destroy something nobody can get back.
   async function deleteComment(iso, eventId, commentId, kind = "plan") {
@@ -4617,16 +4636,20 @@ export default function App() {
         ) : (
           <div style={styles.needsList}>
             {needs.map((need) => (
-              // A real label around a real checkbox, so the whole line is the
-              // hit target -- the same trick the event form's rows use.
-              <label key={need.id} style={styles.needRow}>
-                <input
-                  type="checkbox"
-                  style={styles.eventCheckbox}
-                  checked={!!need.by}
-                  onChange={() => toggleNeed(iso, eventId, need.id)}
-                />
-                <span style={styles.needText(!!need.by)}>{need.text}</span>
+              <div key={need.id} style={styles.needRow}>
+                {/* A real label around a real checkbox, so the text and the
+                    slack beside it tick the line too -- the same trick the
+                    event form's rows use. It stops short of the bin, which
+                    is its own button and must not also mean "tick". */}
+                <label style={styles.needLabel}>
+                  <input
+                    type="checkbox"
+                    style={styles.eventCheckbox}
+                    checked={!!need.by}
+                    onChange={() => toggleNeed(iso, eventId, need.id)}
+                  />
+                  <span style={styles.needText(!!need.by)}>{need.text}</span>
+                </label>
                 {need.by && (
                   <span style={styles.needBy}>
                     <span style={styles.needByLabel}>Prinesel:</span>
@@ -4637,7 +4660,15 @@ export default function App() {
                     />
                   </span>
                 )}
-              </label>
+                <button
+                  style={styles.commentDelete}
+                  onClick={() => deleteNeed(iso, eventId, need.id)}
+                  aria-label={`Izbriši ${need.text}`}
+                  title="Izbriši s seznama"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
             ))}
           </div>
         )}
