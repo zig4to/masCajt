@@ -1769,11 +1769,11 @@ export const styles = {
     borderRadius: 999,
     cursor: "pointer",
   }),
-  // Says what it does until there is a tab on screen to say it instead.
-  // Alone on the row, a bare plus over an ordinary-looking list is a guess:
-  // the panel already has a plus, and that one adds a thing to the list. Once
-  // the first tab exists the strip explains the button, and the label would
-  // only be taking room from the tabs it has to share the row with.
+  // Says what it does until there is more than one tab to say it instead.
+  // Beside a lone "Splošno" a bare plus is still a guess -- the panel already
+  // has a plus, and that one adds a thing to the list, and one pill on its
+  // own does not yet read as a row of tabs. Two do, so from then on the label
+  // would only be taking room from the tabs it shares the row with.
   needTabAdd: (labelled) => ({
     flexShrink: 0,
     display: "flex",

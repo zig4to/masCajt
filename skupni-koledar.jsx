@@ -4896,35 +4896,35 @@ export default function App() {
           </div>
         ) : (
           <div style={styles.needTabsRow}>
-            {/* One tab on its own is the list itself, not a choice between
-                anything, so the strip is just the button that makes the
-                first real one. */}
-            {tabs.length > 1 && (
-              <div style={styles.needTabsStrip}>
-                {tabs.map((tab) => {
-                  const on = tab.id === active;
-                  return (
-                    <button
-                      key={tab.id || "__loose__"}
-                      style={styles.needTab(on)}
-                      // A second press on the tab you are already on opens
-                      // its name, which is also the only door to deleting
-                      // it. The unfiled tab has no row behind it and so no
-                      // name to change.
-                      onClick={() =>
-                        on && tab.id
-                          ? openEditor(tab.id)
-                          : setActiveCats((prev) => ({ ...prev, [group]: tab.id }))
-                      }
-                      aria-pressed={on}
-                    >
-                      {tab.name}
-                      {on && tab.id && <Pencil size={11} style={{ opacity: 0.75 }} />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            {/* "Splošno" stands there from the start, open, even while it is
+                the only one. It is the tab the list below is already in, and
+                showing it is what makes the button beside it read as adding
+                another -- rather than as the first tab appearing out of
+                nowhere and the list seeming to move into it. */}
+            <div style={styles.needTabsStrip}>
+              {tabs.map((tab) => {
+                const on = tab.id === active;
+                return (
+                  <button
+                    key={tab.id || "__loose__"}
+                    style={styles.needTab(on)}
+                    // A second press on the tab you are already on opens its
+                    // name, which is also the only door to deleting it. The
+                    // unfiled tab has no row behind it and so no name to
+                    // change.
+                    onClick={() =>
+                      on && tab.id
+                        ? openEditor(tab.id)
+                        : setActiveCats((prev) => ({ ...prev, [group]: tab.id }))
+                    }
+                    aria-pressed={on}
+                  >
+                    {tab.name}
+                    {on && tab.id && <Pencil size={11} style={{ opacity: 0.75 }} />}
+                  </button>
+                );
+              })}
+            </div>
             <button
               style={styles.needTabAdd(tabs.length <= 1)}
               onClick={() => openEditor(null)}
