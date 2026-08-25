@@ -1248,7 +1248,8 @@ export const styles = {
   },
   // A real <label> wrapping a real checkbox: the whole row is then the hit
   // target, which is what a thumb needs, and the browser gives the pairing
-  // to a screen reader without any aria of ours.
+  // to a screen reader without any aria of ours. The box itself is drawn by
+  // .appCheck in THEME_CSS -- :checked and ::after are not inline styles.
   eventCheckRow: {
     display: "flex",
     alignItems: "center",
@@ -1258,14 +1259,6 @@ export const styles = {
     color: "var(--text-strong)",
     cursor: "pointer",
     padding: "2px 0",
-  },
-  eventCheckbox: {
-    width: 16,
-    height: 16,
-    margin: 0,
-    accentColor: GREEN,
-    cursor: "pointer",
-    flexShrink: 0,
   },
   eventImageRow: {
     display: "flex",

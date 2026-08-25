@@ -128,16 +128,18 @@ const THEME_CSS = `
     outline-offset: 2px;
   }
 
-  /* The tick boxes on the "Kva rabmo" list. A native checkbox is drawn by
-     the operating system -- a grey Windows square, a blue Android tick, a
-     different thing again on a Mac -- and none of them belong to this app.
+  /* Every tick box the app draws for itself -- the "Kva rabmo" list, and
+     the switch in the event form that turns that list on. A native checkbox
+     is drawn by the operating system -- a grey Windows square, a blue
+     Android tick, a different thing again on a Mac -- and none of them
+     belong to this app.
      accent-color only recolours what the platform already decided to draw;
      appearance: none takes the drawing back entirely.
 
      It lives here rather than in styles.js because a box that fills in is
      two states and a mark inside it, and neither :checked nor ::after can be
      written as an inline style. */
-  .needCheck {
+  .appCheck {
     -webkit-appearance: none;
     appearance: none;
     position: relative;
@@ -158,24 +160,24 @@ const THEME_CSS = `
   /* The ring is already green, so hover has to say it some other way: the
      box tints towards the colour it is about to become. Ahead of :checked,
      which sets the same property and has to win once the box is filled. */
-  .needCheck:hover {
+  .appCheck:hover {
     background: var(--green-bg);
   }
   /* Under the finger, not after it: on a phone there is no hover to say the
      box is live, and this is the whole of the feedback before the row
      re-sorts itself. */
-  .needCheck:active {
+  .appCheck:active {
     transform: scale(0.9);
   }
-  .needCheck:checked {
+  .appCheck:checked {
     background: var(--green);
     border-color: var(--green);
-    animation: needCheckPop 200ms ease;
+    animation: appCheckPop 200ms ease;
   }
   /* The tick itself: an empty box wearing two of its four borders, turned
      through 45 degrees. Drawn rather than set in an image so it stays crisp
      at any zoom, and so it costs no request. */
-  .needCheck:checked::after {
+  .appCheck:checked::after {
     content: "";
     position: absolute;
     left: 50%;
@@ -188,14 +190,14 @@ const THEME_CSS = `
        the box on its way round. */
     transform: translate(-50%, -50%) rotate(45deg);
   }
-  .needCheck:focus {
+  .appCheck:focus {
     outline: none;
   }
-  .needCheck:focus-visible {
+  .appCheck:focus-visible {
     outline: 2px solid var(--green);
     outline-offset: 2px;
   }
-  @keyframes needCheckPop {
+  @keyframes appCheckPop {
     0%   { transform: scale(0.85); }
     55%  { transform: scale(1.1); }
     100% { transform: scale(1); }
@@ -204,10 +206,10 @@ const THEME_CSS = `
      to get there. The colour change is the answer; the bounce was only ever
      the flourish on it. */
   @media (prefers-reduced-motion: reduce) {
-    @keyframes needCheckPop {
+    @keyframes appCheckPop {
       0%, 100% { transform: none; }
     }
-    .needCheck:active {
+    .appCheck:active {
       transform: none;
     }
   }
@@ -5061,7 +5063,7 @@ export default function App() {
                 <label style={styles.needLabel}>
                   <input
                     type="checkbox"
-                    className="needCheck"
+                    className="appCheck"
                     checked={!!need.by}
                     onChange={() => toggleNeed(iso, eventId, need.id)}
                   />
@@ -5196,7 +5198,7 @@ export default function App() {
               <label style={styles.eventCheckRow}>
                 <input
                   type="checkbox"
-                  style={styles.eventCheckbox}
+                  className="appCheck"
                   checked={eventChecklistDraft}
                   onChange={(e) => setEventChecklistDraft(e.target.checked)}
                 />
