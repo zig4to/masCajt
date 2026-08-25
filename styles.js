@@ -635,11 +635,50 @@ export const styles = {
   // by the carousel's own loop: a transition would fight that, and a
   // transform rendered by React would be a frame behind it and would snap the
   // strip back to wherever the last render thought it was.
-  recentEventsTrack: (extendedCount) => ({
+  // perView is how many slots the viewport shows, so the track is exactly
+  // that many times wider than the window onto it. It used to be a hard 3,
+  // which was fine while the events strip was the only one; the photo strip
+  // fits more of its smaller slots across the same width.
+  recentEventsTrack: (extendedCount, perView) => ({
     display: "flex",
-    width: `${(extendedCount / 3) * 100}%`,
+    width: `${(extendedCount / perView) * 100}%`,
     willChange: "transform",
   }),
+  // The photo strip's slot. No seam widening: the events strip marks where
+  // its loop comes round because one evening running into another is worth
+  // noticing, and a photo following a photo is not.
+  todayPhotoSlot: (percent) => ({
+    flex: `0 0 ${percent}%`,
+    minWidth: 0,
+    boxSizing: "border-box",
+    padding: "0 5px",
+  }),
+  // Square whatever shape the photo is, so the run keeps one baseline and
+  // does not stagger as portraits and landscapes alternate. The picture is
+  // cropped to it rather than letterboxed -- a thumbnail this size is a
+  // reminder of an evening, not somewhere to study composition.
+  todayPhotoCard: (dragging) => ({
+    display: "block",
+    padding: 0,
+    width: "100%",
+    aspectRatio: "1",
+    overflow: "hidden",
+    borderRadius: 14,
+    border: "1px solid var(--border)",
+    background: "var(--card-bg)",
+    cursor: dragging ? "grabbing" : "pointer",
+    boxShadow: "0 8px 18px -9px rgba(20, 30, 25, 0.35)",
+  }),
+  todayPhotoImg: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    display: "block",
+    // Or a drag that starts on a picture becomes the browser's own image
+    // drag, and the strip never sees the gesture at all.
+    pointerEvents: "none",
+    userSelect: "none",
+  },
   // 5px each side makes the usual 10px gutter between two cards. The loop's
   // seam gets more, so the join reads as a break rather than as one more gap
   // in the run -- and the extra goes on both sides of it, which is what keeps

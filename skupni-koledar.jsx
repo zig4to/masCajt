@@ -1313,6 +1313,11 @@ function useIsDesktop(breakpoint = 860) {
 }
 const CARDS_IN_VIEW = 3;
 
+// The photo strip fits more across the same width: a thumbnail carries one
+// picture and an event card carries four lines of text, so what is legible
+// at a third of the screen for one is generous for the other.
+const PHOTOS_IN_VIEW = 4;
+
 // How many people's initials a collapsed day row shows before collapsing the
 // rest into a count. The row is a summary, not a roster -- the full list is
 // one tap away inside the day.
@@ -1343,6 +1348,8 @@ const CHANGELOG = [
   {
     date: "2026-08-25",
     items: [
+      "«Ko smo se mel»: slike današnjega dogodka drsijo na domači strani",
+      "Slika iz tega traku se odpre na cel zaslon, listaš pa čez cel večer",
       "Kva rabmo: seznam stvari za dogodek, poleg komentarjev na kartici",
       "Na seznam lahko doda kdorkoli, in kdorkoli označi, da stvar prinese",
       "Označena stvar se prečrta, gre na dno in pove, kdo jo prinese",
@@ -1695,25 +1702,38 @@ function PersonChip({ name, color, style, self }) {
   );
 }
 
-function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
-  const count = events.length;
-  const canSlide = count > CARDS_IN_VIEW;
-  const base = canSlide ? CARDS_IN_VIEW : 0;
+// The motion under both strips: a run of slots that drifts left for ever,
+// can be dragged by mouse or finger, and comes back around without a join
+// anyone can see. It is the fiddly part -- the wrap arithmetic, the frame
+// loop, the window listeners, the difference between a swipe and a tap --
+// and it was pulled out of RecentEventsCarousel the moment a second strip
+// wanted it. Two copies of this would have drifted apart within a month.
+//
+// `perView` is how many slots are on screen at once. Both directions wrap
+// seamlessly, which is what the padding on the extended list is for: a copy
+// of the last `perView` items sits before the real ones and a copy of the
+// first `perView` after them, so sliding off either end lands on slots that
+// look exactly like the ones being wrapped to. Once such a copy is fully in
+// view, the offset snaps to the matching real slot -- visually a no-op. Real
+// item 0 therefore lives at slot `perView`, not slot 0, which is why `base`
+// shows up everywhere below instead of a plain 0.
+function useDriftingStrip(count, perView) {
+  const canSlide = count > perView;
+  const base = canSlide ? perView : 0;
+  const extendedCount = canSlide ? count + 2 * perView : count;
 
   const [dragging, setDragging] = useState(false);
   const dragRef = useRef(null);
-  // A swipe ends in a click on whichever card the pointer happened to be
-  // over, so cards have to be able to tell a tap from the tail of a drag. The
-  // click lands within a frame or two of the drag ending, so a short window
-  // after it separates the two -- and unlike a sticky flag, a stale timestamp
-  // can't still be swallowing clicks minutes later.
+  // A swipe ends in a click on whichever slot the pointer happened to be
+  // over, so callers have to be able to tell a tap from the tail of a drag.
+  // The click lands within a frame or two of the drag ending, so a short
+  // window after it separates the two -- and unlike a sticky flag, a stale
+  // timestamp can't still be swallowing clicks minutes later.
   const dragEndedAtRef = useRef(0);
   const viewportRef = useRef(null);
   const trackRef = useRef(null);
 
-  const extendedCount = canSlide ? count + 2 * CARDS_IN_VIEW : count;
-
-  // Where the strip stands, in card widths from the start of the extended
+  // Where the strip stands, in slot widths from the start of the extended
   // list -- a float, and deliberately not React state. It changes every
   // frame, and re-rendering the whole strip sixty times a second to move it
   // is work nobody can see. The animation loop is its only writer; the drag
@@ -1721,7 +1741,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
   const offsetRef = useRef(base);
   const dragPxRef = useRef(0);
   // When the drift may begin. Set once, from the moment the strip has enough
-  // cards to move, rather than at mount: on a slow first load the events
+  // slots to move, rather than at mount: on a slow first load the contents
   // arrive a second or two in, and a countdown started before they did would
   // have the strip walking off almost as soon as it appeared.
   const driftFromRef = useRef(0);
@@ -1731,7 +1751,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
   const paint = useCallback(() => {
     const node = trackRef.current;
     if (!node) return;
-    // The offset is in cards and the slot width is a percentage of the (much
+    // The offset is in slots and the slot width is a percentage of the (much
     // wider) track, while the drag arrives as raw viewport pixels; calc() is
     // what lets the two mix.
     const slot = 100 / extendedCount;
@@ -1743,7 +1763,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
   // Re-centre whenever the list itself changes length, so an offset left over
   // from a longer list cannot park the strip on padding slots. Before paint
   // rather than after, or the first frame of a new list shows the copies at
-  // the front instead of the cards they stand in for.
+  // the front instead of the slots they stand in for.
   useLayoutEffect(() => {
     offsetRef.current = base;
     dragPxRef.current = 0;
@@ -1769,7 +1789,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
       // by however long the pause lasted.
       if (!dragging && driftFromRef.current && now >= driftFromRef.current && last) {
         offsetRef.current += ((now - last) / 1000) * DRIFT_CARDS_PER_SEC;
-        // Past the last real card the strip is standing on the copies of the
+        // Past the last real slot the strip is standing on the copies of the
         // first ones, which look identical -- so stepping back a whole list
         // here is invisible, and is what makes the loop endless.
         if (offsetRef.current >= base + count) offsetRef.current -= count;
@@ -1782,15 +1802,15 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
     return () => cancelAnimationFrame(raf);
   }, [canSlide, dragging, base, count, paint]);
 
-  function handlePointerDown(e) {
+  function onPointerDown(e) {
     if (!canSlide) return;
     dragRef.current = e.clientX;
     setDragging(true);
   }
 
   // Tracked on the window, and deliberately without setPointerCapture: capture
-  // retargets the follow-up click to the captured element, so a card's own
-  // onClick would never fire and tapping a card could not open its day. The
+  // retargets the follow-up click to the captured element, so a slot's own
+  // onClick would never fire and tapping one could not open anything. The
   // window listeners give back the one thing capture was there for -- a drag
   // that carries on after the pointer wanders off the strip.
   useEffect(() => {
@@ -1808,9 +1828,9 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
       const dx = startX === null ? 0 : e.clientX - startX;
       dragPxRef.current = 0;
 
-      // Where the finger left it is where the drift picks up: the strip no
-      // longer has card positions to snap to, so a gesture is worth exactly
-      // the distance it travelled. Cancelled gestures spring back instead.
+      // Where the finger left it is where the drift picks up: the strip has
+      // no slot positions to snap to, so a gesture is worth exactly the
+      // distance it travelled. Cancelled gestures spring back instead.
       if (startX !== null && e.type !== "pointercancel" && dx) {
         const width = trackRef.current
           ? trackRef.current.getBoundingClientRect().width / extendedCount
@@ -1826,7 +1846,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
       paint();
       setDragging(false);
       // Well below SWIPE_THRESHOLD_PX: a drag too small to move the strip
-      // much should still not read as a tap on the card it ended over.
+      // much should still not read as a tap on the slot it ended over.
       if (Math.abs(dx) > 4) dragEndedAtRef.current = performance.now();
     }
 
@@ -1839,6 +1859,45 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
       window.removeEventListener("pointercancel", end);
     };
   }, [dragging, paint, extendedCount, base, count]);
+
+  // True while the click now arriving is really the tail of a swipe. Callers
+  // ask this before acting on a tap.
+  function wasDragged() {
+    return performance.now() - dragEndedAtRef.current < 150;
+  }
+
+  // Lays the padding copies around the real list, so a caller only has to say
+  // what one item looks like.
+  function extend(items) {
+    return canSlide
+      ? [...items.slice(-perView), ...items, ...items.slice(0, perView)]
+      : items;
+  }
+
+  return {
+    canSlide,
+    base,
+    extendedCount,
+    dragging,
+    viewportRef,
+    trackRef,
+    onPointerDown,
+    wasDragged,
+    extend,
+  };
+}
+
+function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
+  const count = events.length;
+  const {
+    canSlide,
+    dragging,
+    viewportRef,
+    trackRef,
+    onPointerDown,
+    wasDragged,
+    extend,
+  } = useDriftingStrip(count, CARDS_IN_VIEW);
 
   if (count === 0) return null;
 
@@ -1854,9 +1913,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
     // simply more events.
     seamAfter: canSlide && i === count - 1,
   }));
-  const extended = canSlide
-    ? [...cards.slice(-CARDS_IN_VIEW), ...cards, ...cards.slice(0, CARDS_IN_VIEW)]
-    : cards;
+  const extended = extend(cards);
   const slotPercent = 100 / extended.length;
 
   return (
@@ -1865,9 +1922,12 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
       <div
         ref={viewportRef}
         style={styles.recentEventsViewport(canSlide, dragging)}
-        onPointerDown={handlePointerDown}
+        onPointerDown={onPointerDown}
       >
-        <div ref={trackRef} style={styles.recentEventsTrack(extended.length)}>
+        <div
+          ref={trackRef}
+          style={styles.recentEventsTrack(extended.length, CARDS_IN_VIEW)}
+        >
           {extended.map(({ ev, hue, seamAfter }, i) => (
             <div
               key={`${ev.id}-${i}`}
@@ -1886,7 +1946,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
                 type="button"
                 style={styles.recentEventCard(hue, dragging, ev._iso === today)}
                 onClick={() => {
-                  if (performance.now() - dragEndedAtRef.current < 150) return;
+                  if (wasDragged()) return;
                   onSelectDay?.(ev._iso);
                 }}
               >
@@ -1910,6 +1970,73 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today }) {
 // Neither platform's mark is in lucide -- its "Apple" is the fruit -- and a
 // generic phone glyph twice over would make the two buttons a coin toss. Both
 // are single filled paths inheriting currentColor.
+// Tonight's pictures, above the reminder for tomorrow. The same drift and
+// the same drag as the events strip -- it is the same gesture over the same
+// kind of run, and two strips on one screen behaving differently would be
+// two things to learn instead of one.
+//
+// Only today's. The archive is where an evening is kept; this is the short
+// window while it still counts as now, and a strip that reached back a week
+// would be the archive with the browsing taken out.
+function TodayPhotoStrip({ photos, onOpen }) {
+  const count = photos.length;
+  const {
+    canSlide,
+    dragging,
+    viewportRef,
+    trackRef,
+    onPointerDown,
+    wasDragged,
+    extend,
+  } = useDriftingStrip(count, PHOTOS_IN_VIEW);
+
+  if (count === 0) return null;
+
+  const extended = extend(photos);
+  const slotPercent = 100 / extended.length;
+
+  return (
+    <>
+      <div style={styles.recentEventsHeading}>Ko smo se mel</div>
+      <div
+        ref={viewportRef}
+        style={styles.recentEventsViewport(canSlide, dragging)}
+        onPointerDown={onPointerDown}
+      >
+        <div
+          ref={trackRef}
+          style={styles.recentEventsTrack(extended.length, PHOTOS_IN_VIEW)}
+        >
+          {extended.map((photo, i) => (
+            // The index is in the key because a photo appears in the run more
+            // than once: the copies at either end are the same picture as the
+            // ones they stand in for.
+            <div key={`${photo.id}-${i}`} style={styles.todayPhotoSlot(slotPercent)}>
+              <button
+                type="button"
+                style={styles.todayPhotoCard(dragging)}
+                onClick={() => {
+                  if (wasDragged()) return;
+                  onOpen(photo);
+                }}
+                aria-label={photo.author ? `Slika od ${photo.author}` : "Slika"}
+              >
+                <img
+                  src={window.photos.publicUrl(photo.path)}
+                  alt=""
+                  loading="lazy"
+                  draggable={false}
+                  style={styles.todayPhotoImg}
+                />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function AndroidMark({ size = 26 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -5959,6 +6086,41 @@ export default function App() {
     );
   }
 
+  // Tonight's pictures, gathered across every event today rather than from
+  // one of them: a day with two outings is still one evening to anybody
+  // scrolling past, and two strips under one heading would say otherwise.
+  //
+  // Guarded on window.photos the same way the archive's strip is -- a browser
+  // still holding an older cached index.html has no photo shim, and this
+  // should quietly not appear rather than take the page down.
+  const todayPhotos =
+    today && window.photos
+      ? sortPhotos(
+          (dayEvents[today] || []).flatMap((ev) =>
+            (dayPhotos[photoGroup(today, ev.id)] || []).map((p) => ({
+              ...p,
+              eventId: ev.id,
+            }))
+          )
+        )
+      : [];
+
+  // No heading over an empty strip, the same rule tomorrow's reminder
+  // follows: on a day nobody photographed, a row saying "Ko smo se mel"
+  // would be saying it about nothing.
+  const todayPhotoStrip = todayPhotos.length > 0 && (
+    <TodayPhotoStrip
+      photos={todayPhotos}
+      // No author, deliberately: the lightbox reads that as "the whole
+      // event", so swiping inside it runs through everyone's pictures in the
+      // order the strip showed them rather than stopping at the end of the
+      // album the tapped one happened to belong to.
+      onOpen={(photo) =>
+        setLightbox({ iso: today, eventId: photo.eventId, id: photo.id })
+      }
+    />
+  );
+
   // Tomorrow's event repeated above the list -- the same card the day itself
   // draws, not a summary of it, so it can be answered from here. Only
   // tomorrow, and only when there is something: a heading over nothing would
@@ -5994,6 +6156,8 @@ export default function App() {
           {nameClashRow}
 
           {recentEventsRow}
+
+          {todayPhotoStrip}
 
           {tomorrowReminder}
 
@@ -6276,6 +6440,7 @@ export default function App() {
         {appFooter}
 
         {viewPersonModal}
+        {photoLightbox}
         {settingsModal}
         {photoNoticeModal}
         {deleteEventModal}
@@ -6294,6 +6459,8 @@ export default function App() {
       {nameClashRow}
 
       {recentEventsRow}
+
+      {todayPhotoStrip}
 
       {tomorrowReminder}
 
@@ -6625,6 +6792,7 @@ export default function App() {
       {appFooter}
 
       {viewPersonModal}
+      {photoLightbox}
       {settingsModal}
       {photoNoticeModal}
       {deleteEventModal}
