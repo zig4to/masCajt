@@ -1350,7 +1350,7 @@ const CHANGELOG = [
   {
     date: "2026-08-25",
     items: [
-      "«Ko smo se mel»: slike današnjega dogodka drsijo na domači strani",
+      "«Ko smo se mel dons»: slike današnjega dogodka drsijo na domači strani",
       "Slika iz tega traku se odpre na cel zaslon, listaš pa čez cel večer",
       "Kva rabmo: seznam stvari za dogodek, poleg komentarjev na kartici",
       "Na seznam lahko doda kdorkoli, in kdorkoli označi, da stvar prinese",
@@ -2007,7 +2007,7 @@ function TodayPhotoStrip({ photos, onOpen }) {
 
   return (
     <>
-      <div style={styles.recentEventsHeading}>Ko smo se mel</div>
+      <div style={styles.recentEventsHeading}>Ko smo se mel dons</div>
       <div
         ref={viewportRef}
         style={styles.recentEventsViewport(canSlide, dragging)}
@@ -6130,7 +6130,7 @@ export default function App() {
   }
 
   // No heading over an empty strip, the same rule tomorrow's reminder
-  // follows: on a day nobody photographed, a row saying "Ko smo se mel"
+  // follows: on a day nobody photographed, a row saying "Ko smo se mel dons"
   // would be saying it about nothing.
   const todayPhotoStrip = todayPhotos.length > 0 && (
     <TodayPhotoStrip
