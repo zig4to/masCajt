@@ -793,6 +793,37 @@ export function parseCommentPerson(person) {
   return null;
 }
 
+// When a comment was written, read straight off its id -- ids here are the
+// millisecond the post was made, so nothing extra had to be stored and every
+// comment ever written already carries one.
+//
+// Ljubljana, like every other time in this app: the druženje happens there,
+// and a comment written at half eleven should say so to whoever reads it from
+// abroad. Day and month only, no year -- a thread is read within days of
+// being written, and the year is four characters saying nothing.
+const ljubljanaStamp = new Intl.DateTimeFormat("sl-SI", {
+  timeZone: TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  day: "numeric",
+  month: "numeric",
+});
+
+export function commentStamp(id) {
+  const at = Number(id);
+  // Guarded rather than assumed: an id that is not a timestamp would render
+  // as "Invalid Date" across every row of the thread.
+  if (!Number.isFinite(at) || at <= 0) return "";
+  const parts = ljubljanaStamp.formatToParts(new Date(at));
+  const part = (type) => parts.find((p) => p.type === type)?.value;
+  const hour = part("hour");
+  const minute = part("minute");
+  const day = part("day");
+  const month = part("month");
+  if (!hour || !minute || !day || !month) return "";
+  return `${hour}:${minute} · ${day}. ${month}.`;
+}
+
 export function encodeComment(comment) {
   return JSON.stringify({ author: comment.author, text: comment.text });
 }
@@ -1472,6 +1503,7 @@ const CHANGELOG = [
   {
     date: "2026-08-25",
     items: [
+      "Pri komentarju piše ura in datum, desno od imena",
       "Domača stran kaže teden dni; ostale odpre gumb na dnu",
       "«Ko smo se mel dons»: slike današnjega dogodka drsijo na domači strani",
       "Slika iz tega traku se odpre na cel zaslon, listaš pa čez cel večer",
@@ -5171,7 +5203,10 @@ export default function App() {
                   self={c.author === name}
                 />
                 <div style={styles.commentBody}>
-                  <div style={styles.commentAuthor}>{c.author}</div>
+                  <div style={styles.commentAuthorRow}>
+                    <span style={styles.commentAuthor}>{c.author}</span>
+                    <span style={styles.commentStamp}>{commentStamp(c.id)}</span>
+                  </div>
                   <div style={styles.commentText}>{c.text}</div>
                 </div>
                 {/* Yours, or anyone's if you are the admin -- the same

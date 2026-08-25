@@ -1704,10 +1704,33 @@ export const styles = {
     borderRadius: 6,
     cursor: "pointer",
   },
+  // The name and the moment share a line. The name takes the slack, which is
+  // what pushes the stamp to the right-hand edge whatever the name's length,
+  // so the stamps line up down the thread instead of trailing each name.
+  commentAuthorRow: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: 8,
+  },
   commentAuthor: {
+    flex: 1,
+    minWidth: 0,
     fontSize: 11.5,
     fontWeight: 700,
     color: "var(--text-heading)",
+    // A long name gives way rather than pushing the stamp off the panel.
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  // Quiet and small: it is there for the one time somebody wonders whether a
+  // comment is from tonight or from last week, not to be read on every row.
+  commentStamp: {
+    flexShrink: 0,
+    fontSize: 10,
+    fontWeight: 600,
+    color: "var(--text-fainter)",
+    whiteSpace: "nowrap",
   },
   commentText: {
     fontSize: 13,
