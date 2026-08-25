@@ -1313,10 +1313,12 @@ function useIsDesktop(breakpoint = 860) {
 }
 const CARDS_IN_VIEW = 3;
 
-// The photo strip fits more across the same width: a thumbnail carries one
-// picture and an event card carries four lines of text, so what is legible
-// at a third of the screen for one is generous for the other.
-const PHOTOS_IN_VIEW = 4;
+// Three across, the same as the events strip above it. Four fitted, but a
+// picture is not a label -- it has to be big enough to recognise a face in,
+// and at a quarter of a phone's width it was a swatch. Sharing the count
+// also lines the two strips up: the same column edges down the page, rather
+// than two runs that nearly agree.
+const PHOTOS_IN_VIEW = 3;
 
 // How many people's initials a collapsed day row shows before collapsing the
 // rest into a count. The row is a summary, not a roster -- the full list is
