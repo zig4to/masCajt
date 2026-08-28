@@ -2140,6 +2140,20 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
     extend,
   } = useDriftingStrip(count, CARDS_IN_VIEW, drift);
 
+  // Events in this window that were moved to another day. The move note is
+  // optional, so the sentence drops the "zaradi ..." clause when there isn't
+  // one. Soonest first, since events already arrives sorted that way.
+  const movedNotices = events.filter((ev) => ev.movedTo);
+  // Shown as full cards for 10s after they first appear, then folded into a
+  // round badge at the right of the "Aktualni dogodki" heading. Tapping the
+  // badge brings them back, and the 10s countdown starts over.
+  const [noticeCollapsed, setNoticeCollapsed] = useState(false);
+  useEffect(() => {
+    if (movedNotices.length === 0 || noticeCollapsed) return;
+    const t = setTimeout(() => setNoticeCollapsed(true), 10000);
+    return () => clearTimeout(t);
+  }, [movedNotices.length, noticeCollapsed]);
+
   if (count === 0) return null;
 
   // Colors come from App rather than being assigned here, because the same
@@ -2157,24 +2171,36 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
   const extended = extend(cards);
   const slotPercent = 100 / extended.length;
 
-  // Events in this window that were moved to another day. The move note is
-  // optional, so the sentence drops the "zaradi ..." clause when there isn't
-  // one. Soonest first, since events already arrives sorted that way.
-  const movedNotices = events.filter((ev) => ev.movedTo);
-
   return (
     <>
-      {movedNotices.map((ev) => (
-        <div key={eventKey(ev._iso, ev.id)} style={styles.movedEventNotice}>
-          <AlertTriangle size={16} style={styles.movedEventNoticeIcon} />
-          <p style={styles.movedEventNoticeText}>
-            <strong>{ev.title}</strong> je bil prestavljen
-            {ev.moveNote ? ` zaradi ${ev.moveNote}` : ""} na dan{" "}
-            {archiveDateLabel(ev.movedTo)}.
-          </p>
+      {movedNotices.length > 0 && (
+        <div style={styles.movedNoticeStack(noticeCollapsed)}>
+          {movedNotices.map((ev) => (
+            <div key={eventKey(ev._iso, ev.id)} style={styles.movedEventNotice}>
+              <AlertTriangle size={16} style={styles.movedEventNoticeIcon} />
+              <p style={styles.movedEventNoticeText}>
+                <strong>{ev.title}</strong> je bil prestavljen
+                {ev.moveNote ? ` zaradi ${ev.moveNote}` : ""} na dan{" "}
+                {archiveDateLabel(ev.movedTo)}.
+              </p>
+            </div>
+          ))}
         </div>
-      ))}
-      <div style={styles.recentEventsHeading}>Aktualni dogodki</div>
+      )}
+      <div style={styles.recentEventsHeadingRow}>
+        <span style={styles.recentEventsHeadingText}>Aktualni dogodki</span>
+        {movedNotices.length > 0 && (
+          <button
+            type="button"
+            style={styles.movedNoticeBadge(noticeCollapsed)}
+            onClick={() => setNoticeCollapsed(false)}
+            aria-label="Prikaži opozorilo o prestavitvi"
+            title="Opozorilo o prestavitvi"
+          >
+            <AlertTriangle size={14} />
+          </button>
+        )}
+      </div>
       <div
         ref={viewportRef}
         style={styles.recentEventsViewport(canSlide, dragging)}

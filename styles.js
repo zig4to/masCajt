@@ -633,6 +633,55 @@ export const styles = {
     padding: "0 20px",
     marginBottom: 14,
   },
+  // The "Aktualni dogodki" heading as a row, so the folded moved-event badge
+  // can sit at its right edge.
+  recentEventsHeadingRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "0 20px",
+    marginBottom: 14,
+    minHeight: 26,
+  },
+  recentEventsHeadingText: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: GREEN,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  // The moved-event notice(s): full cards at first, then folded away. Origin
+  // top-right so the shrink reads as collapsing toward the badge that takes
+  // its place in the heading row.
+  movedNoticeStack: (collapsed) => ({
+    overflow: "hidden",
+    maxHeight: collapsed ? 0 : 600,
+    opacity: collapsed ? 0 : 1,
+    transform: collapsed ? "scale(0.85)" : "scale(1)",
+    transformOrigin: "top right",
+    transition:
+      "max-height 400ms ease, opacity 260ms ease, transform 400ms ease",
+  }),
+  movedNoticeBadge: (shown) => ({
+    marginLeft: "auto",
+    width: 26,
+    height: 26,
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "50%",
+    background: ORANGE_BG,
+    color: ORANGE,
+    border: "none",
+    cursor: "pointer",
+    padding: 0,
+    transform: shown ? "scale(1)" : "scale(0)",
+    opacity: shown ? 1 : 0,
+    pointerEvents: shown ? "auto" : "none",
+    transition:
+      "transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 200ms ease",
+  }),
   // Yellow flag above "Aktualni dogodki" for each upcoming event that was
   // moved to another day, so the move is seen without opening the event.
   movedEventNotice: {
