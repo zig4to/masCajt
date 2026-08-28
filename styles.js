@@ -606,6 +606,24 @@ export const styles = {
   tomorrowCards: {
     padding: "0 16px",
   },
+  // Horizontal strip that rotates between "Se vidimo danes na" (one page per
+  // event today) and the standing "Naslednji dogodek" / "Ne pozabi, jutri
+  // gremo" card, one step every 7s, sliding left and looping.
+  altReminderViewport: {
+    overflow: "hidden",
+  },
+  altReminderTrack: (count, index, animating = true) => ({
+    display: "flex",
+    width: `${count * 100}%`,
+    transform: `translateX(-${(index * 100) / count}%)`,
+    // Off only for the instant the strip jumps from the trailing clone back
+    // to the real first page, so that reset is not itself animated.
+    transition: animating ? "transform 500ms ease" : "none",
+  }),
+  altReminderSlide: (count) => ({
+    width: `${100 / count}%`,
+    flexShrink: 0,
+  }),
   recentEventsHeading: {
     fontSize: 12,
     fontWeight: 800,

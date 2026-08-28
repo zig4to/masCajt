@@ -2070,6 +2070,64 @@ function useDriftingStrip(count, perView, drift = true) {
   };
 }
 
+// The reminder card above "Aktualni dogodki" used to be a single fixed card
+// ("Naslednji dogodek" or "Ne pozabi, jutri gremo"). With something on today
+// it becomes a strip: a "Se vidimo danes" page per event happening today,
+// then that standing card, advancing one step every `intervalMs`.
+//
+// It only ever moves left, forever. A copy of the first page is tacked on the
+// end; stepping past the last real page slides left onto that copy, then --
+// with the transition switched off for one frame -- the strip snaps back to
+// the real first page, so the next step carries on leftward with no rewind.
+// Fewer than two pages: no strip, the page just sits there.
+function AlternatingReminder({ pages, renderPage, intervalMs = 7000 }) {
+  const count = pages.length;
+  const looping = count >= 2;
+  const slides = looping
+    ? [...pages, { ...pages[0], key: `${pages[0].key}-loop` }]
+    : pages;
+  const slideCount = slides.length;
+  const [index, setIndex] = useState(0);
+  const [animating, setAnimating] = useState(true);
+
+  useEffect(() => {
+    if (!looping) return;
+    const t = setInterval(() => setIndex((i) => i + 1), intervalMs);
+    return () => clearInterval(t);
+  }, [looping, intervalMs]);
+
+  useEffect(() => {
+    if (!looping) return;
+    // Sitting on the trailing clone: let the slide land, then jump back to the
+    // real first page with the transition off.
+    if (index >= slideCount - 1) {
+      const t = setTimeout(() => {
+        setAnimating(false);
+        setIndex(0);
+      }, 520);
+      return () => clearTimeout(t);
+    }
+    // Just snapped back -- turn the transition on again a frame later so the
+    // jump itself did not animate, and the next step slides normally.
+    if (!animating) {
+      const r = requestAnimationFrame(() => setAnimating(true));
+      return () => cancelAnimationFrame(r);
+    }
+  }, [index, slideCount, looping, animating]);
+
+  return (
+    <div style={styles.altReminderViewport}>
+      <div style={styles.altReminderTrack(slideCount, index, animating)}>
+        {slides.map((p) => (
+          <div key={p.key} style={styles.altReminderSlide(slideCount)}>
+            {renderPage(p)}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) {
   const count = events.length;
   const {
@@ -6409,51 +6467,65 @@ export default function App() {
     />
   );
 
-  // Tomorrow's event repeated above the list -- the same card the day itself
-  // draws, not a summary of it, so it can be answered from here. Only
-  // tomorrow, and only when there is something: a heading over nothing would
-  // be a standing reminder of no plans.
+  // The reminder card above "Aktualni dogodki": the same card a day itself
+  // draws, not a summary of it, so it can be answered from here. It shows
+  // tomorrow's line-up ("Ne pozabi, jutri gremo") when there is one, else the
+  // next event there is ("Naslednji dogodek"). When something is on today it
+  // also gets a "Se vidimo danes" page, and the two (or more) cycle -- see
+  // reminderPages / AlternatingReminder below.
   const tomorrowIso = addDays(today, 1);
-  // Only when tomorrow is empty. With something on tomorrow, the heading
-  // below already carries that card, and the two would be the same event
-  // under two names -- so this one stands in exactly when that one has
-  // nothing to say.
-  //
-  // Strictly after today, never today itself. Tonight's outing is not news
-  // to anybody looking at this page: it is the first card in the strip, it
-  // has its own day card below, and its pictures may be sitting right above
-  // this heading. What "naslednji" is being asked is what comes once today
-  // is over. Dates are ISO, so a string compare is a date compare.
-  //
-  // Beyond that it is the soonest there is, off the same ordering the strip
-  // is built from. Nothing after today means no heading: there is no next
-  // event to name.
-  const nextEvent =
-    (dayEvents[tomorrowIso] || []).length === 0
-      ? recentEvents.find((ev) => ev._iso > today) || null
+  // nextEvent is strictly after today and only when tomorrow is empty: with
+  // something on tomorrow that card already carries it, and today has its own
+  // "Se vidimo danes" page plus its day card below. Dates are ISO, so a
+  // string compare is a date compare; the ordering is the strip's.
+  const tomorrowHasEvents = (dayEvents[tomorrowIso] || []).length > 0;
+  const nextEvent = !tomorrowHasEvents
+    ? recentEvents.find((ev) => ev._iso > today) || null
+    : null;
+
+  // The card that stood here before today's greeting was folded in: tomorrow's
+  // line-up if there is one, otherwise the next event there is. reminder: true
+  // for the same reason tomorrow's copy carries it -- a card to read, not a
+  // place to work from; editing belongs to the day itself, a tap away.
+  const standingReminderPage = tomorrowHasEvents
+    ? { key: "jutri", heading: "Ne pozabi, jutri gremo", iso: tomorrowIso, onlyId: null }
+    : nextEvent
+      ? {
+          key: "naslednji",
+          heading: "Naslednji dogodek",
+          iso: nextEvent._iso,
+          onlyId: nextEvent.id,
+        }
       : null;
 
-  const nextEventSection = nextEvent && (
+  // One "Se vidimo danes" page per event happening today, then the standing
+  // card. Two or more pages -> AlternatingReminder rotates through them every
+  // 7s; exactly one -> it just renders that page; none -> nothing here.
+  const reminderPages = [
+    ...(dayEvents[today] || []).map((ev) => ({
+      key: `danes-${ev.id}`,
+      heading: "Se vidimo danes",
+      iso: today,
+      onlyId: ev.id,
+    })),
+    ...(standingReminderPage ? [standingReminderPage] : []),
+  ];
+
+  const renderReminderPage = (p) => (
     <>
-      <div style={styles.recentEventsHeading}>Naslednji dogodek</div>
+      <div style={styles.recentEventsHeading}>{p.heading}</div>
       <div style={styles.tomorrowCards}>
-        {/* reminder: true for the same reason tomorrow's copy carries it --
-            this is a card to read, not a place to work from. Editing belongs
-            to the day itself, which is a tap away and is where the form would
-            open anyway. */}
-        {renderEventSection(nextEvent._iso, { reminder: true, onlyId: nextEvent.id })}
+        {renderEventSection(p.iso, { reminder: true, onlyId: p.onlyId })}
       </div>
     </>
   );
 
-  const tomorrowReminder = (dayEvents[tomorrowIso] || []).length > 0 && (
-    <>
-      <div style={styles.recentEventsHeading}>Ne pozabi, jutri gremo</div>
-      <div style={styles.tomorrowCards}>
-        {renderEventSection(tomorrowIso, { reminder: true })}
-      </div>
-    </>
-  );
+  const reminderStrip =
+    reminderPages.length === 0 ? null : reminderPages.length === 1 ? (
+      renderReminderPage(reminderPages[0])
+    ) : (
+      <AlternatingReminder pages={reminderPages} renderPage={renderReminderPage} />
+    );
 
   if (isDesktop) {
     const iso = openDay || today || null;
@@ -6479,9 +6551,7 @@ export default function App() {
 
           {todayPhotoStrip}
 
-          {nextEventSection}
-
-          {tomorrowReminder}
+          {reminderStrip}
 
           {error && <div style={styles.errorBanner}>{error}</div>}
 
@@ -6784,9 +6854,7 @@ export default function App() {
 
       {todayPhotoStrip}
 
-      {nextEventSection}
-
-      {tomorrowReminder}
+      {reminderStrip}
 
       {error && <div style={styles.errorBanner}>{error}</div>}
 
