@@ -606,23 +606,42 @@ export const styles = {
   tomorrowCards: {
     padding: "0 16px",
   },
-  // Horizontal strip that rotates between "Se vidimo danes na" (one page per
-  // event today) and the standing "Naslednji dogodek" / "Ne pozabi, jutri
-  // gremo" card, one step every 7s, sliding left and looping.
+  // Swipeable strip between the "Se vidimo danes" pages (one per event today)
+  // and the standing "Naslednji dogodek" / "Ne pozabi, jutri gremo" card.
+  // Drag to move between them; dots below track the position. A Nastavitve
+  // choice can also step it on a timer -- see AlternatingReminder.
   altReminderViewport: {
     overflow: "hidden",
+    // Horizontal drags belong to the strip; vertical ones stay with the page.
+    touchAction: "pan-y",
+    cursor: "grab",
   },
-  altReminderTrack: (count, index, animating = true) => ({
+  altReminderTrack: (count, index, dragging, dragDX = 0) => ({
     display: "flex",
     width: `${count * 100}%`,
-    transform: `translateX(-${(index * 100) / count}%)`,
-    // Off only for the instant the strip jumps from the trailing clone back
-    // to the real first page, so that reset is not itself animated.
-    transition: animating ? "transform 500ms ease" : "none",
+    transform: `translateX(calc(${(-index * 100) / count}% + ${dragDX}px))`,
+    transition: dragging ? "none" : "transform 350ms ease",
   }),
   altReminderSlide: (count) => ({
     width: `${100 / count}%`,
     flexShrink: 0,
+  }),
+  altReminderDots: {
+    display: "flex",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 2,
+    marginBottom: 6,
+  },
+  altReminderDot: (active) => ({
+    width: active ? 7 : 6,
+    height: active ? 7 : 6,
+    borderRadius: "50%",
+    border: "none",
+    padding: 0,
+    cursor: "pointer",
+    background: active ? GREEN : "var(--divider)",
+    transition: "background 150ms ease, width 150ms ease, height 150ms ease",
   }),
   recentEventsHeading: {
     fontSize: 12,
@@ -1070,6 +1089,14 @@ export const styles = {
     flexDirection: "column",
     gap: 4,
     alignItems: "flex-start",
+  },
+  // Names one control inside a settings section that holds more than one.
+  settingsSubLabel: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: "var(--text-strong)",
+    marginTop: 8,
+    marginBottom: 2,
   },
   pillButton: (active, color, bg) => ({
     flex: 1,

@@ -35,6 +35,7 @@ import {
   CalendarDays,
   Sun,
   Moon,
+  Pause,
   Plus,
   Star,
   X,
@@ -731,11 +732,15 @@ export function decodeEvent(raw, id) {
       attendees: Array.isArray(parsed.attendees) ? parsed.attendees : [],
       // Set when the event was last moved to another day. moveNote is the
       // free-text reason, movedFrom/movedTo are ISO days, movedAt is when.
-      // All empty on an event that has never been moved.
+      // moveSkipNotify suppressed the push about the move; moveHideBanner
+      // keeps it off the home page (calendar only). All empty/false on an
+      // event that has never been moved.
       moveNote: parsed.moveNote || "",
       movedFrom: parsed.movedFrom || "",
       movedTo: parsed.movedTo || "",
       movedAt: parsed.movedAt || "",
+      moveSkipNotify: parsed.moveSkipNotify === true,
+      moveHideBanner: parsed.moveHideBanner === true,
     };
   } catch (e) {
     return null;
@@ -2085,48 +2090,92 @@ function useDriftingStrip(count, perView, drift = true) {
 // with the transition switched off for one frame -- the strip snaps back to
 // the real first page, so the next step carries on leftward with no rewind.
 // Fewer than two pages: no strip, the page just sits there.
-function AlternatingReminder({ pages, renderPage, intervalMs = 7000 }) {
+// A "Se vidimo danes" page per event today, then the standing "Naslednji
+// dogodek" / "Ne pozabi, jutri gremo" card. It sits still by default and the
+// reader swipes left/right between pages; dots below say how many there are
+// and which one is showing. `autoRotate` (a Nastavitve choice) adds a step
+// every `intervalMs`, wrapping back to the first, and pauses mid-drag.
+function AlternatingReminder({ pages, renderPage, autoRotate, intervalMs = 7000 }) {
   const count = pages.length;
-  const looping = count >= 2;
-  const slides = looping
-    ? [...pages, { ...pages[0], key: `${pages[0].key}-loop` }]
-    : pages;
-  const slideCount = slides.length;
   const [index, setIndex] = useState(0);
-  const [animating, setAnimating] = useState(true);
+  const [dragDX, setDragDX] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const dragStartX = useRef(null);
+  // Set true by a drag that actually moved, so the click it ends with does not
+  // also land on whatever button was under the finger (a "Potrdi udeležbo",
+  // say). Cleared by the click-capture handler that swallows that one click.
+  const draggedRef = useRef(false);
+
+  // Keep the pointer in range if the page set shrank under us (an event was
+  // deleted while the strip was on a later page).
+  const safeIndex = count > 0 ? Math.min(index, count - 1) : 0;
 
   useEffect(() => {
-    if (!looping) return;
-    const t = setInterval(() => setIndex((i) => i + 1), intervalMs);
+    if (!autoRotate || count < 2 || dragging) return;
+    const t = setInterval(() => setIndex((i) => (i + 1) % count), intervalMs);
     return () => clearInterval(t);
-  }, [looping, intervalMs]);
+  }, [autoRotate, count, intervalMs, dragging]);
 
-  useEffect(() => {
-    if (!looping) return;
-    // Sitting on the trailing clone: let the slide land, then jump back to the
-    // real first page with the transition off.
-    if (index >= slideCount - 1) {
-      const t = setTimeout(() => {
-        setAnimating(false);
-        setIndex(0);
-      }, 520);
-      return () => clearTimeout(t);
+  function onPointerDown(e) {
+    if (count < 2) return;
+    dragStartX.current = e.clientX;
+    setDragging(true);
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function onPointerMove(e) {
+    if (dragStartX.current == null) return;
+    setDragDX(e.clientX - dragStartX.current);
+  }
+  function endDrag() {
+    if (dragStartX.current == null) return;
+    const dx = dragDX;
+    dragStartX.current = null;
+    setDragging(false);
+    setDragDX(0);
+    draggedRef.current = Math.abs(dx) > 10;
+    const THRESHOLD = 45;
+    if (dx <= -THRESHOLD) setIndex((i) => Math.min(i + 1, count - 1));
+    else if (dx >= THRESHOLD) setIndex((i) => Math.max(i - 1, 0));
+  }
+  function onClickCapture(e) {
+    if (draggedRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      draggedRef.current = false;
     }
-    // Just snapped back -- turn the transition on again a frame later so the
-    // jump itself did not animate, and the next step slides normally.
-    if (!animating) {
-      const r = requestAnimationFrame(() => setAnimating(true));
-      return () => cancelAnimationFrame(r);
-    }
-  }, [index, slideCount, looping, animating]);
+  }
+
+  if (count < 2) return renderPage(pages[0]);
 
   return (
-    <div style={styles.altReminderViewport}>
-      <div style={styles.altReminderTrack(slideCount, index, animating)}>
-        {slides.map((p) => (
-          <div key={p.key} style={styles.altReminderSlide(slideCount)}>
-            {renderPage(p)}
-          </div>
+    <div>
+      <div
+        style={styles.altReminderViewport}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onPointerLeave={endDrag}
+        onClickCapture={onClickCapture}
+      >
+        <div style={styles.altReminderTrack(count, safeIndex, dragging, dragDX)}>
+          {pages.map((p) => (
+            <div key={p.key} style={styles.altReminderSlide(count)}>
+              {renderPage(p)}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={styles.altReminderDots}>
+        {pages.map((p, i) => (
+          <button
+            key={p.key}
+            type="button"
+            aria-label={`Stran ${i + 1} od ${count}`}
+            aria-current={i === safeIndex}
+            style={styles.altReminderDot(i === safeIndex)}
+            onClick={() => setIndex(i)}
+          />
         ))}
       </div>
     </div>
@@ -2148,7 +2197,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
   // Events in this window that were moved to another day. The move note is
   // optional, so the sentence drops the "zaradi ..." clause when there isn't
   // one. Soonest first, since events already arrives sorted that way.
-  const movedNotices = events.filter((ev) => ev.movedTo);
+  const movedNotices = events.filter((ev) => ev.movedTo && !ev.moveHideBanner);
   // Shown as full cards for 10s after they first appear, then folded into a
   // round badge at the right of the "Aktualni dogodki" heading. Tapping the
   // badge brings them back, and the 10s countdown starts over.
@@ -2500,6 +2549,12 @@ export default function App() {
   // made one. Not read from prefers-color-scheme: the calendar is looked at
   // in the evening, and the phone-wide setting says nothing about that.
   const [theme, setTheme] = useState("dark");
+  // Whether the "Aktualni dogodki" strip drifts left on its own. Off unless
+  // the reader has turned it on in Nastavitve; device-local, like the theme.
+  const [stripDrift, setStripDrift] = useState(false);
+  // Whether the "Se vidimo danes" / "Naslednji dogodek" strip steps through
+  // its pages on a timer. Off by default -- it is swipeable either way.
+  const [reminderRotate, setReminderRotate] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   // "calendar" | "archive". Two pages, so a string rather than a router.
@@ -2555,6 +2610,11 @@ export default function App() {
   // Free text left when the date is changed: why the event moved and to when.
   // Travels with the event to the new day; only the latest move's note kept.
   const [eventMoveNoteDraft, setEventMoveNoteDraft] = useState("");
+  // "Ni potrebno obvestiti" -- the move sends no push to anyone.
+  const [eventMoveSilentDraft, setEventMoveSilentDraft] = useState(false);
+  // "Ne objavi obvestila" -- the move is not flagged on the home page, just
+  // carried across in the calendar.
+  const [eventMoveHideBannerDraft, setEventMoveHideBannerDraft] = useState(false);
   // Whether the form's extra fields are unfolded. Most events are a name and
   // a time, so the things below this stay out of the way until asked for --
   // on every open, including an event that already has some of them set.
@@ -2725,6 +2785,50 @@ export default function App() {
       await window.storage.set("theme", next, false);
     } catch (e) {
       console.error("theme save error:", e);
+    }
+  }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await window.storage.get("strip-drift", false);
+        if (res && (res.value === "on" || res.value === "off")) {
+          setStripDrift(res.value === "on");
+        }
+      } catch (e) {
+        console.info("No saved strip-drift yet:", e?.message || e);
+      }
+    })();
+  }, []);
+
+  async function chooseStripDrift(next) {
+    setStripDrift(next);
+    try {
+      await window.storage.set("strip-drift", next ? "on" : "off", false);
+    } catch (e) {
+      console.error("strip-drift save error:", e);
+    }
+  }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await window.storage.get("reminder-rotate", false);
+        if (res && (res.value === "on" || res.value === "off")) {
+          setReminderRotate(res.value === "on");
+        }
+      } catch (e) {
+        console.info("No saved reminder-rotate yet:", e?.message || e);
+      }
+    })();
+  }, []);
+
+  async function chooseReminderRotate(next) {
+    setReminderRotate(next);
+    try {
+      await window.storage.set("reminder-rotate", next ? "on" : "off", false);
+    } catch (e) {
+      console.error("reminder-rotate save error:", e);
     }
   }
 
@@ -3611,6 +3715,8 @@ export default function App() {
     // starts on the day the event currently sits on.
     setShowEventDateInput(!!existing?.moveNote);
     setEventMoveNoteDraft(existing?.moveNote || "");
+    setEventMoveSilentDraft(!!existing?.moveSkipNotify);
+    setEventMoveHideBannerDraft(!!existing?.moveHideBanner);
     // Always shut, whatever the event already carries. The form should open
     // the same way every time -- a drawer that is sometimes down and
     // sometimes not means reading it before you can use it.
@@ -3634,6 +3740,8 @@ export default function App() {
     setEventDateDraft("");
     setShowEventDateInput(false);
     setEventMoveNoteDraft("");
+    setEventMoveSilentDraft(false);
+    setEventMoveHideBannerDraft(false);
     setShowEventMore(false);
     setEventStartDraft("");
     setEventEndDraft("");
@@ -3756,13 +3864,20 @@ export default function App() {
       duration,
       createdBy: existing?.createdBy || name,
       attendees: existing?.attendees || [],
-      // On a move: record why and between which days, stamped now. Otherwise
-      // carry any earlier move's note across untouched -- only the latest
-      // move is kept, and editing the event elsewhere is not a new move.
+      // On a move: record why and between which days, stamped now, plus the
+      // two "don't tell anyone" choices. Otherwise carry any earlier move's
+      // fields across untouched -- only the latest move is kept, and editing
+      // the event elsewhere is not a new move.
       moveNote: movingTo ? eventMoveNoteDraft.trim() : existing?.moveNote || "",
       movedFrom: movingTo ? iso : existing?.movedFrom || "",
       movedTo: movingTo ? movingTo : existing?.movedTo || "",
       movedAt: movingTo ? new Date().toISOString() : existing?.movedAt || "",
+      moveSkipNotify: movingTo
+        ? eventMoveSilentDraft
+        : existing?.moveSkipNotify === true,
+      moveHideBanner: movingTo
+        ? eventMoveHideBannerDraft
+        : existing?.moveHideBanner === true,
     };
 
     setDayEvents((prev) => {
@@ -4659,12 +4774,12 @@ export default function App() {
         )
       : [];
 
-  // One strip moves at a time. With tonight's pictures on screen the events
-  // above them hold still: two runs drifting past each other at the top of
-  // the page is a page that will not settle, and the pictures are the newer
-  // thing -- they are what somebody opening the app tonight came back for.
-  // On a day nobody photographed there is nothing to compete with, and the
-  // events drift as they always have.
+  // Off by default; the reader turns it on in Nastavitve. Even then one strip
+  // moves at a time: with tonight's pictures on screen the events above them
+  // hold still, because two runs drifting past each other at the top of the
+  // page is a page that will not settle, and the pictures are the newer thing
+  // -- what somebody opening the app tonight came back for. On a day nobody
+  // photographed there is nothing to compete with.
   //
   // Only the drift stops. A drag is something a person asked for, and it
   // still works: with more than three events the rest are still reachable.
@@ -4674,7 +4789,7 @@ export default function App() {
       eventHues={eventHues}
       onSelectDay={openEventDay}
       today={today}
-      drift={todayPhotos.length === 0}
+      drift={stripDrift && todayPhotos.length === 0}
     />
   );
 
@@ -5170,6 +5285,48 @@ export default function App() {
           >
             <Moon size={16} /> Temna
           </button>
+        </div>
+
+        <div style={styles.settingsSection}>
+          <div style={styles.modalTitle}>Premiki</div>
+          <p style={styles.introText}>
+            Ali se trakova sama premikata. Med karticami se da drsati s prstom
+            tako ali tako.
+          </p>
+
+          <div style={styles.settingsSubLabel}>Aktualni dogodki</div>
+          <div style={{ ...styles.modeRow, width: "100%" }}>
+            <button
+              style={styles.themeOptionButton(stripDrift)}
+              onClick={() => chooseStripDrift(true)}
+            >
+              <ArrowLeft size={16} /> Drsi
+            </button>
+            <button
+              style={styles.themeOptionButton(!stripDrift)}
+              onClick={() => chooseStripDrift(false)}
+            >
+              <Pause size={16} /> Pri miru
+            </button>
+          </div>
+
+          <div style={styles.settingsSubLabel}>
+            Se vidimo danes / Naslednji dogodek
+          </div>
+          <div style={{ ...styles.modeRow, width: "100%" }}>
+            <button
+              style={styles.themeOptionButton(reminderRotate)}
+              onClick={() => chooseReminderRotate(true)}
+            >
+              <ArrowLeft size={16} /> Menja
+            </button>
+            <button
+              style={styles.themeOptionButton(!reminderRotate)}
+              onClick={() => chooseReminderRotate(false)}
+            >
+              <Pause size={16} /> Pri miru
+            </button>
+          </div>
         </div>
 
         <div style={styles.settingsSection}>
@@ -5789,6 +5946,28 @@ export default function App() {
                         value={eventMoveNoteDraft}
                         onChange={(e) => setEventMoveNoteDraft(e.target.value)}
                       />
+                      <label style={styles.eventCheckRow}>
+                        <input
+                          type="checkbox"
+                          className="appCheck"
+                          checked={eventMoveSilentDraft}
+                          onChange={(e) =>
+                            setEventMoveSilentDraft(e.target.checked)
+                          }
+                        />
+                        Ni potrebno obvestiti
+                      </label>
+                      <label style={styles.eventCheckRow}>
+                        <input
+                          type="checkbox"
+                          className="appCheck"
+                          checked={eventMoveHideBannerDraft}
+                          onChange={(e) =>
+                            setEventMoveHideBannerDraft(e.target.checked)
+                          }
+                        />
+                        Ne objavi obvestila
+                      </label>
                       {/* Same save as the form's main Shrani, but placed here
                           so the move can be confirmed without scrolling past
                           the rest of the fields. Live only once the date has
@@ -6564,7 +6743,11 @@ export default function App() {
     reminderPages.length === 0 ? null : reminderPages.length === 1 ? (
       renderReminderPage(reminderPages[0])
     ) : (
-      <AlternatingReminder pages={reminderPages} renderPage={renderReminderPage} />
+      <AlternatingReminder
+        pages={reminderPages}
+        renderPage={renderReminderPage}
+        autoRotate={reminderRotate}
+      />
     );
 
   if (isDesktop) {

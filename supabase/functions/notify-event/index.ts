@@ -94,12 +94,18 @@ Deno.serve(async (req) => {
   if (rowError) return ok(`could not re-read the event: ${rowError.message}`);
   if (!row) return ok("no such event -- ignoring");
 
-  let creator = "";
+  let parsed: { createdBy?: string; moveSkipNotify?: boolean };
   try {
-    creator = JSON.parse(row.value ?? "{}").createdBy ?? "";
+    parsed = JSON.parse(row.value ?? "{}");
   } catch {
     return ok("event value was not json");
   }
+
+  // "Ni potrebno obvestiti" on a reschedule: the row is still an INSERT on the
+  // new day, so the trigger fired, but the person moving it asked for no push.
+  if (parsed.moveSkipNotify === true) return ok("move marked as no-notify");
+
+  const creator = parsed.createdBy ?? "";
 
   // Matches the app's greeting, which also shows the first name only.
   const firstName = creator.trim().split(/\s+/)[0] || "Nekdo";
