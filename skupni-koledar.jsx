@@ -30,6 +30,7 @@ import {
   RefreshCw,
   Sparkles,
   ArrowLeft,
+  AlertTriangle,
   CalendarDays,
   Sun,
   Moon,
@@ -83,6 +84,7 @@ const THEME_CSS = `
     --red: #B23434;
     --red-bg: #F7E9E4;
     --orange: #C6862F;
+    --orange-bg: #F6EEDD;
     --pink: #B85C7A;
   }
   :root[data-theme="dark"] {
@@ -110,6 +112,7 @@ const THEME_CSS = `
     --red: #E15A5A;
     --red-bg: #34211C;
     --orange: #E0A855;
+    --orange-bg: #332A1B;
     --pink: #E08FA8;
   }
 
@@ -725,6 +728,13 @@ export function decodeEvent(raw, id) {
       duration: parsed.duration || "",
       createdBy: parsed.createdBy || "",
       attendees: Array.isArray(parsed.attendees) ? parsed.attendees : [],
+      // Set when the event was last moved to another day. moveNote is the
+      // free-text reason, movedFrom/movedTo are ISO days, movedAt is when.
+      // All empty on an event that has never been moved.
+      moveNote: parsed.moveNote || "",
+      movedFrom: parsed.movedFrom || "",
+      movedTo: parsed.movedTo || "",
+      movedAt: parsed.movedAt || "",
     };
   } catch (e) {
     return null;
@@ -2089,8 +2099,23 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
   const extended = extend(cards);
   const slotPercent = 100 / extended.length;
 
+  // Events in this window that were moved to another day. The move note is
+  // optional, so the sentence drops the "zaradi ..." clause when there isn't
+  // one. Soonest first, since events already arrives sorted that way.
+  const movedNotices = events.filter((ev) => ev.movedTo);
+
   return (
     <>
+      {movedNotices.map((ev) => (
+        <div key={eventKey(ev._iso, ev.id)} style={styles.movedEventNotice}>
+          <AlertTriangle size={16} style={styles.movedEventNoticeIcon} />
+          <p style={styles.movedEventNoticeText}>
+            <strong>{ev.title}</strong> je bil prestavljen
+            {ev.moveNote ? ` zaradi ${ev.moveNote}` : ""} na dan{" "}
+            {archiveDateLabel(ev.movedTo)}.
+          </p>
+        </div>
+      ))}
       <div style={styles.recentEventsHeading}>Aktualni dogodki</div>
       <div
         ref={viewportRef}
@@ -2438,6 +2463,9 @@ export default function App() {
   // so leaving the field alone is the same as not moving it.
   const [eventDateDraft, setEventDateDraft] = useState("");
   const [showEventDateInput, setShowEventDateInput] = useState(false);
+  // Free text left when the date is changed: why the event moved and to when.
+  // Travels with the event to the new day; only the latest move's note kept.
+  const [eventMoveNoteDraft, setEventMoveNoteDraft] = useState("");
   // Whether the form's extra fields are unfolded. Most events are a name and
   // a time, so the things below this stay out of the way until asked for --
   // on every open, including an event that already has some of them set.
@@ -3490,7 +3518,10 @@ export default function App() {
     setEventImageDraft(existing?.image || "");
     setEventChecklistDraft(!!existing?.checklist);
     setEventDateDraft(iso);
-    setShowEventDateInput(false);
+    // Opened only when there is a past move to show; the date itself always
+    // starts on the day the event currently sits on.
+    setShowEventDateInput(!!existing?.moveNote);
+    setEventMoveNoteDraft(existing?.moveNote || "");
     // Always shut, whatever the event already carries. The form should open
     // the same way every time -- a drawer that is sometimes down and
     // sometimes not means reading it before you can use it.
@@ -3513,6 +3544,7 @@ export default function App() {
     setEventChecklistDraft(false);
     setEventDateDraft("");
     setShowEventDateInput(false);
+    setEventMoveNoteDraft("");
     setShowEventMore(false);
     setEventStartDraft("");
     setEventEndDraft("");
@@ -3617,6 +3649,11 @@ export default function App() {
       eventStartDraft && eventEndDraft
         ? `${eventStartDraft}–${eventEndDraft}`
         : eventStartDraft || eventEndDraft || "";
+    // A day picked under "Več možnosti" moves the event instead of editing it
+    // where it stands. Only for one that already exists: a new event is
+    // simply created on whichever day you started from.
+    const movingTo =
+      existing && eventDateDraft && eventDateDraft !== iso ? eventDateDraft : null;
     const event = {
       id: eventId,
       title,
@@ -3630,12 +3667,14 @@ export default function App() {
       duration,
       createdBy: existing?.createdBy || name,
       attendees: existing?.attendees || [],
+      // On a move: record why and between which days, stamped now. Otherwise
+      // carry any earlier move's note across untouched -- only the latest
+      // move is kept, and editing the event elsewhere is not a new move.
+      moveNote: movingTo ? eventMoveNoteDraft.trim() : existing?.moveNote || "",
+      movedFrom: movingTo ? iso : existing?.movedFrom || "",
+      movedTo: movingTo ? movingTo : existing?.movedTo || "",
+      movedAt: movingTo ? new Date().toISOString() : existing?.movedAt || "",
     };
-    // A day picked under "Več možnosti" moves the event instead of editing it
-    // where it stands. Only for one that already exists: a new event is
-    // simply created on whichever day you started from.
-    const movingTo =
-      existing && eventDateDraft && eventDateDraft !== iso ? eventDateDraft : null;
 
     setDayEvents((prev) => {
       const list = prev[iso] || [];
@@ -5618,104 +5657,158 @@ export default function App() {
               {/* Only for an event that exists. Choosing a day for one that
                   does not yet would just be creating it somewhere else,
                   which is what standing on that day and pressing add is. */}
-              {existing &&
-                (showEventDateInput ? (
-                  <div style={styles.noteBlock}>
+              {existing && (
+                <div style={styles.eventOption(showEventDateInput)}>
+                  <button
+                    style={styles.eventOptionToggle(showEventDateInput)}
+                    onClick={() => setShowEventDateInput((open) => !open)}
+                    aria-expanded={showEventDateInput}
+                  >
+                    <CalendarDays size={13} /> Prestavi datum dogodka
+                    <ChevronRight
+                      size={13}
+                      style={styles.eventOptionCaret(showEventDateInput)}
+                    />
+                  </button>
+                  {showEventDateInput && (
+                    <div style={styles.eventOptionBody}>
+                      <input
+                        type="date"
+                        style={styles.input}
+                        aria-label="Nov datum dogodka"
+                        value={eventDateDraft}
+                        onChange={(e) => setEventDateDraft(e.target.value)}
+                      />
+                      <p style={styles.hint}>
+                        Obvestilo: zakaj je bil dogodek prestavljen in na kateri
+                        dan. Neobvezno.
+                      </p>
+                      <textarea
+                        style={styles.noteTextarea}
+                        rows={2}
+                        placeholder="Npr. Zaradi dežja prestavljeno na soboto 12. 8."
+                        aria-label="Obvestilo o prestavitvi"
+                        value={eventMoveNoteDraft}
+                        onChange={(e) => setEventMoveNoteDraft(e.target.value)}
+                      />
+                      {/* Same save as the form's main Shrani, but placed here
+                          so the move can be confirmed without scrolling past
+                          the rest of the fields. Live only once the date has
+                          actually been changed to another day. */}
+                      <button
+                        style={{
+                          ...styles.confirmMoveButton,
+                          opacity:
+                            eventTitleDraft.trim() &&
+                            eventDateDraft &&
+                            eventDateDraft !== iso
+                              ? 1
+                              : 0.5,
+                        }}
+                        disabled={
+                          !eventTitleDraft.trim() ||
+                          !eventDateDraft ||
+                          eventDateDraft === iso
+                        }
+                        onClick={() => saveEvent(iso, id)}
+                      >
+                        Potrdi prestavitev
+                      </button>
+                      <button
+                        style={styles.noteRemoveButton}
+                        onClick={() => {
+                          setEventDateDraft(iso);
+                          setEventMoveNoteDraft("");
+                          setShowEventDateInput(false);
+                        }}
+                      >
+                        Ne prestavljaj
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              <div style={styles.eventOption(showEventLinkInput)}>
+                <button
+                  style={styles.eventOptionToggle(showEventLinkInput)}
+                  onClick={() => setShowEventLinkInput((open) => !open)}
+                  aria-expanded={showEventLinkInput}
+                >
+                  <Link size={13} /> Dodaj povezavo
+                  <ChevronRight
+                    size={13}
+                    style={styles.eventOptionCaret(showEventLinkInput)}
+                  />
+                </button>
+                {showEventLinkInput && (
+                  <div style={styles.eventOptionBody}>
                     <input
-                      type="date"
                       style={styles.input}
-                      aria-label="Nov datum dogodka"
-                      value={eventDateDraft}
-                      onChange={(e) => setEventDateDraft(e.target.value)}
+                      type="url"
+                      inputMode="url"
+                      placeholder="Povezava (https://…)"
+                      value={eventLinkDraft}
+                      onChange={(e) => setEventLinkDraft(e.target.value)}
                     />
                     <button
                       style={styles.noteRemoveButton}
                       onClick={() => {
-                        setEventDateDraft(iso);
-                        setShowEventDateInput(false);
+                        setEventLinkDraft("");
+                        setShowEventLinkInput(false);
                       }}
                     >
-                      Ne prestavljaj
+                      Odstrani povezavo
                     </button>
                   </div>
-                ) : (
-                  <button
-                    style={styles.addNoteButton}
-                    onClick={() => setShowEventDateInput(true)}
-                  >
-                    <CalendarDays size={12} /> Prestavi datum dogodka
-                  </button>
-                ))}
-              {showEventLinkInput ? (
-                <div style={styles.noteBlock}>
-                  <input
-                    style={styles.input}
-                    type="url"
-                    inputMode="url"
-                    placeholder="Povezava (https://…)"
-                    value={eventLinkDraft}
-                    onChange={(e) => setEventLinkDraft(e.target.value)}
-                  />
-                  <button
-                    style={styles.noteRemoveButton}
-                    onClick={() => {
-                      setEventLinkDraft("");
-                      setShowEventLinkInput(false);
-                    }}
-                  >
-                    Odstrani povezavo
-                  </button>
-                </div>
-              ) : (
+                )}
+              </div>
+              <div style={styles.eventOption(Boolean(eventImageDraft))}>
+                {/* A button rather than a label, so the picker only opens
+                    from the press and nothing else can trip it. */}
                 <button
-                  style={styles.addNoteButton}
-                  onClick={() => setShowEventLinkInput(true)}
+                  style={styles.eventOptionToggle(Boolean(eventImageDraft))}
+                  disabled={eventImageUploading}
+                  onClick={() =>
+                    document.getElementById(eventImageInputId)?.click()
+                  }
                 >
-                  <Link size={12} /> Dodaj povezavo
+                  <Plus size={13} />{" "}
+                  {eventImageUploading
+                    ? "Nalagam …"
+                    : eventImageDraft
+                      ? "Zamenjaj sliko"
+                      : "Dodaj sliko"}
                 </button>
-              )}
-              {eventImageDraft ? (
-                <div style={styles.eventImageRow}>
-                  <img
-                    src={eventImageUrl(eventImageDraft)}
-                    alt=""
-                    style={styles.eventImagePreview}
-                  />
-                  <button
-                    style={styles.noteRemoveButton}
-                    onClick={() => setEventImageDraft("")}
-                  >
-                    Odstrani sliko
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {/* A button rather than a label, so the picker only opens
-                      from the press and nothing else can trip it. */}
-                  <button
-                    style={styles.addNoteButton}
-                    disabled={eventImageUploading}
-                    onClick={() =>
-                      document.getElementById(eventImageInputId)?.click()
-                    }
-                  >
-                    <Plus size={12} />{" "}
-                    {eventImageUploading ? "Nalagam …" : "Dodaj sliko"}
-                  </button>
-                  <input
-                    id={eventImageInputId}
-                    type="file"
-                    accept="image/*"
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      uploadEventImage(iso, e.target.files);
-                      // Cleared so picking the same file twice in a row
-                      // still fires a change event the second time.
-                      e.target.value = "";
-                    }}
-                  />
-                </>
-              )}
+                {eventImageDraft && (
+                  <div style={styles.eventOptionBody}>
+                    <div style={styles.eventImageRow}>
+                      <img
+                        src={eventImageUrl(eventImageDraft)}
+                        alt=""
+                        style={styles.eventImagePreview}
+                      />
+                      <button
+                        style={styles.noteRemoveButton}
+                        onClick={() => setEventImageDraft("")}
+                      >
+                        Odstrani sliko
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <input
+                  id={eventImageInputId}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    uploadEventImage(iso, e.target.files);
+                    // Cleared so picking the same file twice in a row
+                    // still fires a change event the second time.
+                    e.target.value = "";
+                  }}
+                />
+              </div>
               <input
                 style={styles.input}
                 placeholder="Ključna beseda"

@@ -6,6 +6,7 @@
 export const GREEN = "var(--green)";
 export const GREEN_BG = "var(--green-bg)";
 export const ORANGE = "var(--orange)";
+export const ORANGE_BG = "var(--orange-bg)";
 export const RED = "var(--red)";
 export const RED_BG = "var(--red-bg)";
 export const PINK = "var(--pink)";
@@ -614,6 +615,27 @@ export const styles = {
     padding: "0 20px",
     marginBottom: 14,
   },
+  // Yellow flag above "Aktualni dogodki" for each upcoming event that was
+  // moved to another day, so the move is seen without opening the event.
+  movedEventNotice: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 9,
+    margin: "0 20px 10px 20px",
+    padding: "10px 12px",
+    background: ORANGE_BG,
+    color: ORANGE,
+    borderRadius: 10,
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+  movedEventNoticeIcon: {
+    flexShrink: 0,
+    marginTop: 1,
+  },
+  movedEventNoticeText: {
+    margin: 0,
+  },
   recentEventsViewport: (canSlide, dragging) => ({
     overflow: "hidden",
     // The top few pixels are also what keeps the cards' shadows from being
@@ -1072,6 +1094,19 @@ export const styles = {
     cursor: "pointer",
     transition: "background 150ms ease",
   }),
+  // Confirms the reschedule from inside the date block, so the move can be
+  // committed without reaching the form's main Shrani at the bottom.
+  confirmMoveButton: {
+    alignSelf: "stretch",
+    padding: "9px 12px",
+    fontSize: 13,
+    fontWeight: 700,
+    color: "#fff",
+    background: GREEN,
+    border: "none",
+    borderRadius: 10,
+    cursor: "pointer",
+  },
   editActionsRow: {
     display: "flex",
     gap: 8,
@@ -1281,6 +1316,43 @@ export const styles = {
     paddingLeft: 10,
     borderLeft: "2px solid var(--divider)",
   },
+  // One collapsible control under "Več možnosti". Closed it is a quiet
+  // outlined row in the stack; open it becomes a card with a solid green
+  // header, so at a glance exactly one option reads as the open one.
+  eventOption: (open) => ({
+    display: "flex",
+    flexDirection: "column",
+    borderRadius: 10,
+    overflow: "hidden",
+    border: open ? `1.5px solid ${GREEN}` : "1px solid var(--border)",
+    background: open ? GREEN_BG : "transparent",
+  }),
+  eventOptionToggle: (open) => ({
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    width: "100%",
+    padding: "9px 11px",
+    fontSize: 12.5,
+    fontWeight: open ? 700 : 600,
+    color: open ? "#fff" : GREEN,
+    background: open ? GREEN : "transparent",
+    border: "none",
+    cursor: "pointer",
+    textAlign: "left",
+  }),
+  eventOptionCaret: (open) => ({
+    marginLeft: "auto",
+    flexShrink: 0,
+    transition: "transform 150ms ease",
+    transform: open ? "rotate(90deg)" : "none",
+  }),
+  eventOptionBody: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    padding: "10px 11px",
+  },
   // A real <label> wrapping a real checkbox: the whole row is then the hit
   // target, which is what a thumb needs, and the browser gives the pairing
   // to a screen reader without any aria of ours. The box itself is drawn by
@@ -1289,11 +1361,13 @@ export const styles = {
     display: "flex",
     alignItems: "center",
     gap: 8,
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: 600,
     color: "var(--text-strong)",
     cursor: "pointer",
-    padding: "2px 0",
+    padding: "9px 11px",
+    border: "1px solid var(--border)",
+    borderRadius: 10,
   },
   eventImageRow: {
     display: "flex",
