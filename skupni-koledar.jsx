@@ -26,6 +26,7 @@ import {
   Link,
   FolderDown,
   ListChecks,
+  Mountain,
   Megaphone,
   RefreshCw,
   Sparkles,
@@ -1616,6 +1617,10 @@ const DRIFT_START_DELAY_MS = 7000;
 // particular evening needs somebody to carry is a different question, and
 // that is the per-event "Kva rabmo" list on the card itself.
 const CHECKLIST_URL = "https://zig4to.github.io/Checkliste/";
+
+// Kam -- the club's "where to" app, another standalone tool reached from the
+// menu, sitting right under Checkliste.
+const KAM_URL = "https://zig4to.github.io/Kam/";
 
 const NAME_POPUP_MS = 3000;
 
@@ -4735,6 +4740,15 @@ export default function App() {
             onClick={() => setMenuOpen(false)}
           >
             <ListChecks size={14} /> Checkliste
+          </a>
+          <a
+            style={styles.menuLink}
+            href={KAM_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMenuOpen(false)}
+          >
+            <Mountain size={14} /> Kam
           </a>
           <button
             style={styles.menuItem(false)}
