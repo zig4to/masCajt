@@ -2045,7 +2045,11 @@ export const styles = {
     minWidth: 0,
     fontSize: 13,
     color: done ? "var(--text-faint)" : "var(--text)",
-    textDecoration: done ? "line-through" : "none",
+    textDecorationLine: done ? "line-through" : "none",
+    // A hairline rather than the browser's default 2-3px bar, and a shade
+    // lighter than the text, so the struck word stays readable.
+    textDecorationThickness: "1px",
+    textDecorationColor: "var(--text-fainter)",
     // Free text, same as a comment: one long word has to wrap rather than
     // push the panel wider than the card around it.
     overflowWrap: "anywhere",
