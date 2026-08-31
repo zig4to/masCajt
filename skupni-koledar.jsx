@@ -39,6 +39,7 @@ import {
   Plus,
   Star,
   X,
+  CloudLightning,
 } from "lucide-react";
 import {
   styles,
@@ -1626,6 +1627,11 @@ const CHECKLIST_URL = "https://zig4to.github.io/Checkliste/";
 // Kam -- the club's "where to" app, another standalone tool reached from the
 // menu, sitting right under Checkliste.
 const KAM_URL = "https://zig4to.github.io/Kam/";
+
+// Viharnik -- mountain weather forecast, on Vercel rather than GitHub Pages
+// like the others (it needs a server-side route), but linked from the menu
+// the same way.
+const VIHARNIK_URL = "https://viharnik.vercel.app/";
 
 const NAME_POPUP_MS = 3000;
 
@@ -4855,6 +4861,15 @@ export default function App() {
             onClick={() => setMenuOpen(false)}
           >
             <ListChecks size={14} /> Checkliste
+          </a>
+          <a
+            style={styles.menuLink}
+            href={VIHARNIK_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setMenuOpen(false)}
+          >
+            <CloudLightning size={14} /> Vreme hribi
           </a>
           <a
             style={styles.menuLink}
