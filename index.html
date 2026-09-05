@@ -267,5 +267,8 @@
       ]);
       createRoot(document.getElementById("root")).render(createElement(App));
     </script>
+    <!-- Ponudba namestitve aplikacije (PWA) ob odprtju. Samostojno, ne
+         posega v React ne v service worker (ta tu namenoma ne predpomni). -->
+    <script src="./install-promo.js"></script>
   </body>
 </html>
