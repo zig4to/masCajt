@@ -5855,7 +5855,11 @@ export default function App() {
         >
           <div style={styles.eventEyebrow}>Dogodek</div>
           <input
-            autoFocus={!reminder}
+            // Only a new event opens with the cursor in here: you came to
+            // type a name. Editing an existing one opens the card to read
+            // and adjust, so autofocus there just throws the phone keyboard
+            // up over it. `id == null` is "new"; a legacy "" id is an edit.
+            autoFocus={!reminder && id == null}
             style={styles.input}
             placeholder="Ime dogodka"
             value={eventTitleDraft}
