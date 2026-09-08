@@ -192,7 +192,9 @@ async function runTest(name, fn) {
       await openToday(page);
 
       // Start a new event, type a draft title, then cancel without saving.
-      await page.click('button[aria-label="Dodaj nov dogodek"]');
+      // The "add another" button sits under the whole event stack now, the
+      // same spot it has on a day with no events -- not on the card corner.
+      await page.click("text=+ Dodaj dogodek");
       await page.waitForTimeout(200);
       await page.fill('input[placeholder="Ime dogodka"]', "Osnutek ki se ne shrani");
       await page.click("text=Prekliči");

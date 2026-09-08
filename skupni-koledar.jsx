@@ -6188,25 +6188,19 @@ export default function App() {
                   )}
                 </div>
                 {/* The reminder copy is a heads-up, not a place to work from:
-                    editing and adding both belong to the day itself, which is
-                    a tap away and is where the form would open anyway. */}
-                {!reminder && (
+                    editing belongs to the day itself, which is a tap away and
+                    is where the form would open anyway. Adding a further event
+                    is a day-level action too, so it lives in the "+ Dodaj
+                    dogodek" button under the whole stack rather than on one
+                    card's corner -- the same place it sits on an empty day. */}
+                {!reminder && canEdit && (
                   <div style={styles.eventHeaderActions}>
-                    {canEdit && (
-                      <button
-                        style={styles.editEntryButton}
-                        onClick={() => startEditingEvent(iso, event.id)}
-                        aria-label="Uredi dogodek"
-                      >
-                        <Pencil size={13} />
-                      </button>
-                    )}
                     <button
                       style={styles.editEntryButton}
-                      onClick={() => startEditingEvent(iso, null)}
-                      aria-label="Dodaj nov dogodek"
+                      onClick={() => startEditingEvent(iso, event.id)}
+                      aria-label="Uredi dogodek"
                     >
-                      <Plus size={13} />
+                      <Pencil size={13} />
                     </button>
                   </div>
                 )}
@@ -6318,7 +6312,11 @@ export default function App() {
           );
         })}
         {creatingNew && eventForm(null)}
-        {events.length === 0 && !creatingNew && (
+        {/* Under the whole stack whether the day has events or not, so the
+            "add another" affordance is always in the same spot -- it used to
+            hide on a card corner once one event existed. Not on the reminder
+            copy, and not while a form is already open here. */}
+        {!reminder && !isEditingHere && (
           <button
             style={styles.addEventButton}
             onClick={() => startEditingEvent(iso, null)}
