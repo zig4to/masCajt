@@ -2233,6 +2233,16 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
   }));
   const extended = extend(cards);
   const slotPercent = 100 / extended.length;
+  // Below the sliding threshold the strip is a static row, and dividing the
+  // width into thirds leaves one event stranded at a third and two at
+  // two-thirds. So: one event fills half the width, two fill it between them,
+  // three keep the thirds the carousel uses -- so switching to sliding at four
+  // is not a jump. `recentEventsTrack` turns this into the track width
+  // (extended.length / trackPerView), and `slotPercent` already divides that
+  // track evenly, so the slots land at half, half-and-half, or thirds.
+  const trackPerView = canSlide
+    ? CARDS_IN_VIEW
+    : Math.min(Math.max(count, 2), CARDS_IN_VIEW);
 
   return (
     <>
@@ -2271,7 +2281,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
       >
         <div
           ref={trackRef}
-          style={styles.recentEventsTrack(extended.length, CARDS_IN_VIEW)}
+          style={styles.recentEventsTrack(extended.length, trackPerView)}
         >
           {extended.map(({ ev, hue, seamAfter }, i) => (
             <div
