@@ -2243,6 +2243,9 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
   const trackPerView = canSlide
     ? CARDS_IN_VIEW
     : Math.min(Math.max(count, 2), CARDS_IN_VIEW);
+  // One or two wide cards drop the square and take their height from the text.
+  // A row of three, or the sliding run, stays square so the run reads even.
+  const cardsFitContent = !canSlide && count <= 2;
 
   return (
     <>
@@ -2299,7 +2302,12 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
               {seamAfter && <div style={styles.recentEventsSeam} />}
               <button
                 type="button"
-                style={styles.recentEventCard(hue, dragging, ev._iso === today)}
+                style={styles.recentEventCard(
+                  hue,
+                  dragging,
+                  ev._iso === today,
+                  cardsFitContent
+                )}
                 onClick={() => {
                   if (wasDragged()) return;
                   onSelectDay?.(ev._iso);

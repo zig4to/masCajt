@@ -821,14 +821,17 @@ export const styles = {
   // Rendered as a <button> (it opens the event's day), so it carries the
   // usual button resets: without them the card would pick up the UA's font
   // and centre its text.
-  recentEventCard: (hue, dragging, isToday) => ({
+  recentEventCard: (hue, dragging, isToday, contentHeight) => ({
     font: "inherit",
     color: "inherit",
     textAlign: "left",
     // While a drag is in flight the whole strip is being grabbed, so the
     // cursor should say that rather than advertise a click that won't happen.
     cursor: dragging ? "grabbing" : "pointer",
-    aspectRatio: "1",
+    // Square keeps a row of three (or the sliding run) even; but one or two
+    // wide cards forced square just tower over their own text, so there they
+    // shrink to fit what's written in them instead.
+    aspectRatio: contentHeight ? "auto" : "1",
     width: "100%",
     minWidth: 0,
     boxSizing: "border-box",
