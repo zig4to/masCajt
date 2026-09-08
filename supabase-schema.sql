@@ -143,7 +143,10 @@ language plpgsql
 security definer
 as $$
 begin
-  if new.key like 'avail:%:__event__%' then
+  -- Underscores are escaped: in LIKE '_' is a single-char wildcard, so the
+  -- unescaped pattern also matched any 'avail:<iso>:XXeventYY...' key. Only a
+  -- literal '__event__' marker should reach the function.
+  if new.key like 'avail:%:\_\_event\_\_%' then
     perform net.http_post(
       url := 'https://mpiliybdfhgqslubvhwd.supabase.co/functions/v1/notify-event',
       body := jsonb_build_object(

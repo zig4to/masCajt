@@ -1097,14 +1097,17 @@ export function activeTabId(chosen, tabs) {
 // browses before it is spent. Longest side capped at 1600px takes that to
 // roughly 300 KB, still more detail than the archive ever displays, and the
 // budget lasts hundreds of browses instead.
-// Push notifications, phase one: everything the browser needs to hand us a
-// subscription, and somewhere to keep it. Nothing sends yet -- that needs a
-// server holding the private half of this key pair, and the point of stopping
-// here is to find out whether iOS cooperates before anyone builds one.
+// Push notifications, browser side: everything needed to hand us a
+// subscription, and somewhere to keep it -- one "push:" row per device.
+// Sending is server-side: the notify_new_event trigger in supabase-schema.sql
+// calls the notify-event Edge Function (supabase/functions/notify-event) on a
+// new dogodek, which holds the private half of this key pair and web-pushes
+// everyone but the creator.
 //
 // The public key is meant to ship in client code; it is what the push service
 // checks a message was signed by. The private half is not in this repo and
-// must never be.
+// must never be -- it lives only in the Edge Function's secrets and a password
+// manager, and must match the VAPID_PUBLIC_KEY secret set alongside it.
 const VAPID_PUBLIC_KEY =
   "BCyzjXYvw_0jxjMWD4Z8AAqn3tAak8tmvaxEPA1uaiaSoGnzeii8mBFVcdsAgttQNHN_GFOwo96gC-q-iK3YWGs";
 
