@@ -445,6 +445,22 @@ export function weekdayAbbrev(iso) {
   return WEEKDAY_NAMES[utcFromIso(iso).getUTCDay()];
 }
 
+// Lower-case, unlike the month names: these run inside a phrase ("nedelja,
+// 21.8 ob 21:00"), not as a card title.
+const WEEKDAY_NAMES_FULL = [
+  "nedelja",
+  "ponedeljek",
+  "torek",
+  "sreda",
+  "četrtek",
+  "petek",
+  "sobota",
+];
+
+export function weekdayFull(iso) {
+  return WEEKDAY_NAMES_FULL[utcFromIso(iso).getUTCDay()];
+}
+
 // Capitalised because these are card titles rather than words in a sentence,
 // which is the one place Slovenian writes a month with a capital.
 const MONTH_NAMES_SL = [
@@ -1227,6 +1243,20 @@ export function splitDuration(duration) {
   if (!duration) return { start: "", end: "" };
   const [start, end] = duration.split(/\s*[–-]\s*/);
   return { start: (start || "").trim(), end: (end || "").trim() };
+}
+
+// The "when" line under an event's title: full weekday, day.month, then the
+// time. "nedelja, 21.8 ob 21:00" for a single time, "nedelja, 21.8 od 20:00 –
+// 21:00" for a from--to slot, and just "nedelja, 21.8" when no time is set.
+// The date is spelled out here even inside an already-dated day card so the
+// same line also reads correctly in the "jutri" reminder copy, where the
+// event stands on its own.
+export function eventWhenLabel(iso, duration) {
+  const date = `${weekdayFull(iso)}, ${dayNumber(iso)}.${monthNumber(iso)}`;
+  const { start, end } = splitDuration(duration);
+  if (!start) return date;
+  if (end) return `${date} od ${start} – ${end}`;
+  return `${date} ob ${start}`;
 }
 
 // Flattens the per-day event map into one list ordered nearest-date-first.
@@ -6314,9 +6344,11 @@ export default function App() {
                     </span>
                   </div>
                   <div style={styles.eventTitle}>{event.title}</div>
-                  {event.duration && (
-                    <div style={styles.eventDuration}>{event.duration}</div>
-                  )}
+                  {/* Always shown, time or not -- the date is the point, and a
+                      bare "nedelja, 21.8" still answers "when". */}
+                  <div style={styles.eventDuration}>
+                    {eventWhenLabel(iso, event.duration)}
+                  </div>
                 </div>
                 {/* The reminder copy is a heads-up, not a place to work from:
                     editing belongs to the day itself, which is a tap away and

@@ -24,6 +24,28 @@ test("splitDuration: empty/undefined", () => {
   assert.deepEqual(m.splitDuration(undefined), { start: "", end: "" });
 });
 
+test("weekdayFull: full lower-case Slovenian weekday", () => {
+  assert.equal(m.weekdayFull("2026-08-22"), "sobota");
+  assert.equal(m.weekdayFull("2026-08-23"), "nedelja");
+});
+
+test("eventWhenLabel: single time, range, legacy hyphen, and no time", () => {
+  // 2026-08-23 is a Sunday (2026-08-22 is Saturday, per shortDateLabel above).
+  assert.equal(m.eventWhenLabel("2026-08-23", "21:00"), "nedelja, 23.8 ob 21:00");
+  assert.equal(
+    m.eventWhenLabel("2026-08-23", "20:00–21:00"),
+    "nedelja, 23.8 od 20:00 – 21:00"
+  );
+  // A legacy duration stored with a plain hyphen still formats as a range.
+  assert.equal(
+    m.eventWhenLabel("2026-08-23", "20:00 - 21:00"),
+    "nedelja, 23.8 od 20:00 – 21:00"
+  );
+  // No time set: the date still stands on its own.
+  assert.equal(m.eventWhenLabel("2026-08-23", ""), "nedelja, 23.8");
+  assert.equal(m.eventWhenLabel("2026-08-23", undefined), "nedelja, 23.8");
+});
+
 test("decodeEvent: legacy empty id is preserved, not coerced to null/undefined", () => {
   // Regression: three real events in the shared calendar were created before
   // per-day event ids existed, so their storage key has no id suffix and
