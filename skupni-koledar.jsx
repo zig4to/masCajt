@@ -6370,11 +6370,11 @@ export default function App() {
                   >
                     {copiedEventId === id ? (
                       <>
-                        <Check size={12} /> Povezava kopirana
+                        <Check size={13} /> Kopirano
                       </>
                     ) : (
                       <>
-                        <Share size={12} /> Deli dogodek
+                        <Share size={13} /> Deli dogodek
                       </>
                     )}
                   </button>
@@ -6382,7 +6382,7 @@ export default function App() {
                     style={styles.eventShareButton}
                     onClick={() => openShareImage(iso, id)}
                   >
-                    <ImageDown size={12} /> Deli sliko
+                    <ImageDown size={13} /> Deli sliko
                   </button>
                 </div>
               )}

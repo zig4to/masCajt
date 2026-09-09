@@ -1076,26 +1076,27 @@ export const styles = {
     padding: "4px 8px",
     cursor: "pointer",
   },
-  // "Deli dogodek" / "Deli sliko" in the "Več možnosti" drawer. Outlined green
-  // chips, sitting side by side in shareRow rather than stretched, so they read
-  // as two discrete actions and not full-width fields.
+  // "Deli dogodek" / "Deli sliko" in the "Več možnosti" drawer. Two outlined
+  // green buttons on one row, each taking half of it (flex: 1), a bit larger
+  // than the other drawer controls so the pair reads as the main share action.
   eventShareButton: {
+    flex: 1,
     display: "flex",
     alignItems: "center",
-    gap: 4,
-    fontSize: 11.5,
+    justifyContent: "center",
+    gap: 6,
+    fontSize: 13,
     fontWeight: 600,
+    whiteSpace: "nowrap",
     color: GREEN,
     background: GREEN_BG,
     border: `1px solid ${GREEN}`,
-    borderRadius: 7,
-    padding: "4px 8px",
+    borderRadius: 8,
+    padding: "9px 10px",
     cursor: "pointer",
   },
-  // Wraps rather than squeezes the two chips on a narrow phone.
   shareRow: {
     display: "flex",
-    flexWrap: "wrap",
     gap: 8,
   },
   // The generated card image inside the "Deli sliko" preview sheet.

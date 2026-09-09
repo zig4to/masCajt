@@ -239,7 +239,7 @@ async function runTest(name, fn) {
       await page.click("text=Deli dogodek");
 
       // The button confirms in place...
-      await page.waitForSelector("text=Povezava kopirana", { timeout: 4000 });
+      await page.waitForSelector("text=Kopirano", { timeout: 4000 });
       // ...and the clipboard holds a link straight back to this event, built
       // from wherever the app is served rather than a hard-coded host.
       const copied = await page.evaluate(() => navigator.clipboard.readText());
