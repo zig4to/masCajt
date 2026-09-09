@@ -353,6 +353,13 @@ async function runTest(name, fn) {
       assert.ok(!snapshotHtml.includes("Potrdi udeležbo"), "snapshot must not show the attend prompt");
       assert.ok(!/>\(\d+\)</.test(snapshotHtml), "snapshot must not show the comment count toggle");
 
+      // Headless Chromium has no Web Share for files -- "Deli" must say so
+      // inside the sheet, not fall through to a banner hidden behind it.
+      await page.getByRole("button", { name: "Deli", exact: true }).click();
+      await page.waitForSelector("text=Deljenje slike na tej napravi ni na voljo", {
+        timeout: 3000,
+      });
+
       await page.click("text=Zapri");
       await page.waitForTimeout(200);
       assert.equal(await preview.count(), 0, "preview sheet should close");

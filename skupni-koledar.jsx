@@ -3937,6 +3937,12 @@ export default function App() {
       return null;
     });
   }
+  // A hint shown inside the preview sheet itself -- the app-wide error banner
+  // renders behind the modal, so a message put there just looks like the tap
+  // did nothing.
+  function setShareHint(text) {
+    setShareImage((s) => (s ? { ...s, hint: text } : s));
+  }
   async function shareImageNative() {
     const s = shareImage;
     if (!s || s.status !== "ready" || !s.file) return;
@@ -3947,14 +3953,20 @@ export default function App() {
       !navigator.share ||
       (navigator.canShare && !navigator.canShare({ files: [s.file] }))
     ) {
-      setError("Deljenje slike na tej napravi ni na voljo — uporabi Shrani.");
+      setShareHint(
+        "Deljenje slike na tej napravi ni na voljo — uporabi Shrani."
+      );
       return;
     }
     try {
       await navigator.share({ files: [s.file], title: s.title || "Dogodek" });
+      closeShareImage();
     } catch (e) {
-      // The user backing out of the share sheet rejects with AbortError --
-      // not a failure, nothing to report.
+      // Backing out of the share sheet rejects with AbortError -- expected,
+      // nothing to say. Anything else is a real miss.
+      if (e && e.name !== "AbortError") {
+        setShareHint("Deljenje ni uspelo. Poskusi Shrani.");
+      }
     }
   }
   function saveShareImage() {
@@ -7010,6 +7022,9 @@ export default function App() {
             alt="Predogled slike dogodka"
             style={styles.sharePreviewImg}
           />
+        )}
+        {shareImage.hint && (
+          <p style={styles.shareHint}>{shareImage.hint}</p>
         )}
         <div style={styles.confirmActions}>
           <button style={styles.cancelButton} onClick={closeShareImage}>

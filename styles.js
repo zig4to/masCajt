@@ -1106,6 +1106,13 @@ export const styles = {
     display: "block",
     margin: "4px 0",
   },
+  // Inline note under the preview image (e.g. "sharing not available here").
+  shareHint: {
+    margin: "8px 0 4px",
+    fontSize: 12.5,
+    lineHeight: 1.4,
+    color: "var(--text-secondary)",
+  },
   modeRow: {
     display: "flex",
     gap: 8,
