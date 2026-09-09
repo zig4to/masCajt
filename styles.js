@@ -1371,7 +1371,7 @@ export const styles = {
     marginTop: 2,
   },
   eventDuration: {
-    fontSize: 12,
+    fontSize: 13,
     color: "var(--text-secondary)",
     marginTop: 2,
   },

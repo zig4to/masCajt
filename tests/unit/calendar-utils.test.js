@@ -31,19 +31,21 @@ test("weekdayFull: full lower-case Slovenian weekday", () => {
 
 test("eventWhenLabel: single time, range, legacy hyphen, and no time", () => {
   // 2026-08-23 is a Sunday (2026-08-22 is Saturday, per shortDateLabel above).
-  assert.equal(m.eventWhenLabel("2026-08-23", "21:00"), "nedelja, 23.8 ob 21:00");
+  // The weekday leads the line, so it is capitalised -- including "Četrtek".
+  assert.equal(m.eventWhenLabel("2026-08-23", "21:00"), "Nedelja, 23.8 ob 21:00");
+  assert.equal(m.eventWhenLabel("2026-08-27", "21:00"), "Četrtek, 27.8 ob 21:00");
   assert.equal(
     m.eventWhenLabel("2026-08-23", "20:00–21:00"),
-    "nedelja, 23.8 od 20:00 – 21:00"
+    "Nedelja, 23.8 od 20:00 – 21:00"
   );
   // A legacy duration stored with a plain hyphen still formats as a range.
   assert.equal(
     m.eventWhenLabel("2026-08-23", "20:00 - 21:00"),
-    "nedelja, 23.8 od 20:00 – 21:00"
+    "Nedelja, 23.8 od 20:00 – 21:00"
   );
   // No time set: the date still stands on its own.
-  assert.equal(m.eventWhenLabel("2026-08-23", ""), "nedelja, 23.8");
-  assert.equal(m.eventWhenLabel("2026-08-23", undefined), "nedelja, 23.8");
+  assert.equal(m.eventWhenLabel("2026-08-23", ""), "Nedelja, 23.8");
+  assert.equal(m.eventWhenLabel("2026-08-23", undefined), "Nedelja, 23.8");
 });
 
 test("decodeEvent: legacy empty id is preserved, not coerced to null/undefined", () => {

@@ -1246,13 +1246,13 @@ export function splitDuration(duration) {
 }
 
 // The "when" line under an event's title: full weekday, day.month, then the
-// time. "nedelja, 21.8 ob 21:00" for a single time, "nedelja, 21.8 od 20:00 –
-// 21:00" for a from--to slot, and just "nedelja, 21.8" when no time is set.
-// The date is spelled out here even inside an already-dated day card so the
-// same line also reads correctly in the "jutri" reminder copy, where the
-// event stands on its own.
+// time. "Nedelja, 21.8 ob 21:00" for a single time, "Nedelja, 21.8 od 20:00 –
+// 21:00" for a from--to slot, and just "Nedelja, 21.8" when no time is set.
+// The weekday leads the line, so it takes a capital. The date is spelled out
+// here even inside an already-dated day card so the same line also reads
+// correctly in the "jutri" reminder copy, where the event stands on its own.
 export function eventWhenLabel(iso, duration) {
-  const date = `${weekdayFull(iso)}, ${dayNumber(iso)}.${monthNumber(iso)}`;
+  const date = `${capitalize(weekdayFull(iso))}, ${dayNumber(iso)}.${monthNumber(iso)}`;
   const { start, end } = splitDuration(duration);
   if (!start) return date;
   if (end) return `${date} od ${start} – ${end}`;
