@@ -3444,7 +3444,22 @@ export default function App() {
   }, [name, loadAllData]);
 
   useEffect(() => {
-    if (days.length && !hasAutoOpenedRef.current) {
+    // Wait until the calendar itself is on screen, not just until the day list
+    // exists. This effect fires once (hasAutoOpenedRef) and consumes the
+    // one-shot scroll target, so running it while an "appLoader" / install
+    // screen / sign-in screen is still up would spend the open and the scroll
+    // on a calendar that is not in the DOM yet -- the day would end up expanded
+    // but never scrolled to, which reads as the link having done nothing. The
+    // deps below are exactly the conditions the render gate checks before it
+    // paints the calendar.
+    const calendarReady =
+      days.length &&
+      name &&
+      !needsSurname &&
+      installHintSeen === true &&
+      firstLoadDone &&
+      view === "calendar";
+    if (calendarReady && !hasAutoOpenedRef.current) {
       hasAutoOpenedRef.current = true;
       // Arriving from outside the list at a particular day: a push notification
       // carries "#<iso>", and a shared event link carries "#e=<iso>:<id>". Both
@@ -3475,7 +3490,7 @@ export default function App() {
       // which pushed the rest of the week below the fold for a day whose
       // answer the person usually already knows.
     }
-  }, [days]);
+  }, [days, name, needsSurname, installHintSeen, firstLoadDone, view]);
 
   async function fetchExistingNames() {
     const res = await window.storage.list("avail:", true);

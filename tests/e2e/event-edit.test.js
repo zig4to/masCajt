@@ -72,6 +72,12 @@ function localToday() {
   return new Intl.DateTimeFormat("sv-SE").format(new Date());
 }
 
+function addDays(iso, n) {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 function eventRow(iso, idSuffix, value) {
   return { key: `avail:${iso}:__event__${idSuffix}`, value: JSON.stringify(value) };
 }
@@ -245,8 +251,16 @@ async function runTest(name, fn) {
       const context = await browser.newContext({ viewport: { width: 480, height: 900 } });
       const page = await context.newPage();
       const today = localToday();
+      // A few days out, so the card sits well down the list -- only a working
+      // scroll can bring it to the top, unlike today's card which is there
+      // anyway.
+      const target = addDays(today, 4);
       await mockKvStore(page, [
-        eventRow(today, "111111", {
+        eventRow(today, "aaaaaa", {
+          title: "Danasnji", description: "", duration: "09:00–10:00",
+          createdBy: "Test Uporabnik", attendees: [],
+        }),
+        eventRow(target, "111111", {
           title: "Dogodek Iz Povezave",
           description: "",
           duration: "18:00–20:00",
@@ -261,19 +275,31 @@ async function runTest(name, fn) {
       // added is not a reload, so the app would never re-mount and the
       // auto-open effect would never run.
       await page.goto("about:blank");
-      await page.goto(`${server.url}/index.html#e=${today}:111111`, { waitUntil: "networkidle" });
+      await page.goto(`${server.url}/index.html#e=${target}:111111`, { waitUntil: "networkidle" });
       await page.waitForTimeout(500);
       const installHint = page.locator("text=Razumem");
       if (await installHint.count()) {
         await installHint.click();
         await page.waitForTimeout(500);
       }
-      await page.waitForTimeout(800);
+      await page.waitForTimeout(1500);
 
       // No day card was clicked here: the event's edit control only renders for
       // an expanded day, so its presence means the link opened the day itself.
       await page.waitForSelector('button[aria-label="Uredi dogodek"]', { timeout: 4000 });
       assert.ok(await page.locator("text=Dogodek Iz Povezave").count());
+
+      // Regression: the auto-open effect used to fire while the "appLoader" was
+      // still up, spending its one-shot scroll on a calendar not yet in the
+      // DOM. The day would end up expanded but never pulled to the top -- so
+      // assert the card actually sits near the top of the viewport.
+      const cardTop = await page
+        .locator(`#day-${target}`)
+        .evaluate((el) => el.getBoundingClientRect().top);
+      assert.ok(
+        cardTop > -40 && cardTop < 140,
+        `day card should be scrolled near the top, was at ${cardTop}px`
+      );
       await context.close();
     });
   } finally {
