@@ -72,6 +72,31 @@ test("eventKey: normal id", () => {
   assert.equal(key, "avail:2026-08-27:__event__1699999999999");
 });
 
+test("eventShareHash / parseEventShareHash round-trip", () => {
+  const hash = m.eventShareHash("2026-09-15", "1737000000000");
+  assert.equal(hash, "#e=2026-09-15:1737000000000");
+  assert.deepEqual(m.parseEventShareHash(hash), {
+    iso: "2026-09-15",
+    id: "1737000000000",
+  });
+  // A location.hash read back without the leading "#" must still parse.
+  assert.deepEqual(m.parseEventShareHash("e=2026-09-15:1737000000000"), {
+    iso: "2026-09-15",
+    id: "1737000000000",
+  });
+});
+
+test("parseEventShareHash: rejects anything that is not an event link", () => {
+  // A plain "#<iso>" push-notification hash is handled by the other branch of
+  // the auto-open effect, not this one -- it must not match here.
+  assert.equal(m.parseEventShareHash("#2026-09-15"), null);
+  assert.equal(m.parseEventShareHash("#e=2026-09-15"), null);
+  assert.equal(m.parseEventShareHash("#e=2026-9-15:12"), null);
+  assert.equal(m.parseEventShareHash("#e=2026-09-15:notanid"), null);
+  assert.equal(m.parseEventShareHash(""), null);
+  assert.equal(m.parseEventShareHash(null), null);
+});
+
 test("encodeHours / decodeHours round-trip", () => {
   const hours = Array(24).fill(null);
   hours[9] = "free";

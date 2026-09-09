@@ -1076,6 +1076,23 @@ export const styles = {
     padding: "4px 8px",
     cursor: "pointer",
   },
+  // "Deli dogodek" in the "Več možnosti" drawer. Same outlined shape as the
+  // delete button but green, and pinned to the start rather than stretched,
+  // so it reads as one more discrete action and not a full-width field.
+  eventShareButton: {
+    display: "flex",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: GREEN,
+    background: GREEN_BG,
+    border: `1px solid ${GREEN}`,
+    borderRadius: 7,
+    padding: "4px 8px",
+    cursor: "pointer",
+  },
   modeRow: {
     display: "flex",
     gap: 8,

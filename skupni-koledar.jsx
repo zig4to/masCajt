@@ -661,6 +661,46 @@ export function eventKey(iso, id) {
   return `avail:${iso}:${EVENT_MARKER}${id}`;
 }
 
+// Deep link to a single event. Hash, not query string: it matches the "#<iso>"
+// convention push notifications already use (see the auto-open effect in App),
+// and a static host does nothing with a query string anyway. Shape "#e=<iso>:<id>".
+// The event id is a plain millisecond timestamp, so a bare "\d+" is enough to
+// tell it apart from the "#<iso>" form.
+export function eventShareHash(iso, id) {
+  return `#e=${iso}:${id}`;
+}
+export function parseEventShareHash(hash) {
+  const m = /^#?e=(\d{4}-\d{2}-\d{2}):(\d+)$/.exec(hash || "");
+  return m ? { iso: m[1], id: m[2] } : null;
+}
+
+// Copy to the clipboard, returning whether it took. The async Clipboard API
+// needs a secure context and is missing or blocked in some in-app webviews
+// (Messenger, Instagram), so a hidden-textarea + execCommand fallback covers
+// the rest; if both fail the caller shows the link for a manual copy.
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {}
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 // Identifies one person's chip on one event, so an in-flight join or leave
 // animation is pinned to that chip alone -- the same person attending two
 // events must be able to animate on one without twitching on the other.
@@ -2648,6 +2688,9 @@ export default function App() {
   const [showEventMore, setShowEventMore] = useState(false);
   const [eventStartDraft, setEventStartDraft] = useState("");
   const [eventEndDraft, setEventEndDraft] = useState("");
+  // Id of the event whose share link was just copied -- flips the button label
+  // to a confirmation for a couple of seconds, then clears itself.
+  const [copiedEventId, setCopiedEventId] = useState(null);
   // Attendee chips currently playing an animation: chip id -> "in" | "out".
   // Only ever holds the one or two chips mid-flight; entries are cleared as
   // each animation lands.
@@ -3403,19 +3446,27 @@ export default function App() {
   useEffect(() => {
     if (days.length && !hasAutoOpenedRef.current) {
       hasAutoOpenedRef.current = true;
-      // Arriving from a notification: the push carries "#<iso>" so the tap
-      // lands on the event someone was told about rather than at the top of
-      // the calendar. Guarded to the visible window -- a notification left
-      // unread for two weeks points at a day no longer shown, so it falls
-      // through to the plain list rather than scrolling nowhere.
+      // Arriving from outside the list at a particular day: a push notification
+      // carries "#<iso>", and a shared event link carries "#e=<iso>:<id>". Both
+      // land the tap on that day rather than at the top of the calendar. Guarded
+      // to the visible window -- a notification or link left for two weeks points
+      // at a day no longer shown, so it falls through to the plain list rather
+      // than scrolling nowhere.
       const fromHash = (window.location.hash || "").replace(/^#/, "");
-      if (/^\d{4}-\d{2}-\d{2}$/.test(fromHash) && days.includes(fromHash)) {
+      const shared = parseEventShareHash(window.location.hash);
+      const targetIso =
+        shared && days.includes(shared.iso)
+          ? shared.iso
+          : /^\d{4}-\d{2}-\d{2}$/.test(fromHash) && days.includes(fromHash)
+            ? fromHash
+            : null;
+      if (targetIso) {
         // Through openEventDay rather than setOpenDay: past the tenth day a
         // card is not rendered until the list is expanded, so setting it open
         // directly would scroll to nothing and look like the tap did nothing.
         // The event strip already needed solving this, and a notification is
         // the same arrival from outside the list.
-        openEventDay(fromHash);
+        openEventDay(targetIso);
         // Cleared so a reload later does not jump back to a day the person
         // has long since dealt with.
         history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -3748,6 +3799,7 @@ export default function App() {
     // the same way every time -- a drawer that is sometimes down and
     // sometimes not means reading it before you can use it.
     setShowEventMore(false);
+    setCopiedEventId(null);
     const { start, end } = splitDuration(existing?.duration || "");
     setEventStartDraft(start);
     setEventEndDraft(end);
@@ -3770,8 +3822,31 @@ export default function App() {
     setEventMoveSilentDraft(false);
     setEventMoveHideBannerDraft(false);
     setShowEventMore(false);
+    setCopiedEventId(null);
     setEventStartDraft("");
     setEventEndDraft("");
+  }
+
+  // Build a link straight to this event and drop it on the clipboard. The URL
+  // is rebuilt from the current location every time rather than stored, so it
+  // always points at wherever the app is actually served from. Only offered
+  // for a saved event -- the hash needs the event's id, which does not exist
+  // until it has been written once.
+  async function copyEventLink(iso, id) {
+    const url =
+      window.location.origin +
+      window.location.pathname +
+      eventShareHash(iso, id);
+    const ok = await copyText(url);
+    if (ok) {
+      setCopiedEventId(id);
+      setTimeout(
+        () => setCopiedEventId((c) => (c === id ? null : c)),
+        2000
+      );
+    } else {
+      setError("Povezave ni bilo mogoče kopirati. Povezava: " + url);
+    }
   }
 
   // Every row an event owns is addressed by the day it sits on, so moving
@@ -6132,6 +6207,22 @@ export default function App() {
                 value={eventKeywordDraft}
                 onChange={(e) => setEventKeywordDraft(e.target.value)}
               />
+              {existing && (
+                <button
+                  style={styles.eventShareButton}
+                  onClick={() => copyEventLink(iso, id)}
+                >
+                  {copiedEventId === id ? (
+                    <>
+                      <Check size={12} /> Povezava kopirana
+                    </>
+                  ) : (
+                    <>
+                      <Share size={12} /> Deli dogodek
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           )}
           <div style={styles.editActionsRow}>

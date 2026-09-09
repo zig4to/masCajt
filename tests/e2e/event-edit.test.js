@@ -207,6 +207,75 @@ async function runTest(name, fn) {
       assert.equal(await page.locator('input[placeholder="Ime dogodka"]').inputValue(), "Obstoječi");
       await page.close();
     });
+
+    await runTest("share button in 'Več možnosti' copies a deep link to this event", async () => {
+      const context = await browser.newContext({
+        viewport: { width: 480, height: 900 },
+        permissions: ["clipboard-read", "clipboard-write"],
+      });
+      const page = await context.newPage();
+      const today = localToday();
+      await mockKvStore(page, [
+        eventRow(today, "111111", {
+          title: "Deljeni Dogodek",
+          description: "",
+          duration: "18:00–20:00",
+          createdBy: "Test Uporabnik",
+          attendees: [],
+        }),
+      ]);
+      await loginAsThrowawayUser(page, server.url);
+      await openToday(page);
+      await page.click('button[aria-label="Uredi dogodek"]');
+      await page.waitForTimeout(300);
+      await page.click("text=Več možnosti");
+      await page.waitForTimeout(200);
+      await page.click("text=Deli dogodek");
+
+      // The button confirms in place...
+      await page.waitForSelector("text=Povezava kopirana", { timeout: 4000 });
+      // ...and the clipboard holds a link straight back to this event, built
+      // from wherever the app is served rather than a hard-coded host.
+      const copied = await page.evaluate(() => navigator.clipboard.readText());
+      assert.equal(copied, `${server.url}/index.html#e=${today}:111111`);
+      await context.close();
+    });
+
+    await runTest("opening a shared event link lands on that day, already expanded", async () => {
+      const context = await browser.newContext({ viewport: { width: 480, height: 900 } });
+      const page = await context.newPage();
+      const today = localToday();
+      await mockKvStore(page, [
+        eventRow(today, "111111", {
+          title: "Dogodek Iz Povezave",
+          description: "",
+          duration: "18:00–20:00",
+          createdBy: "Test Uporabnik",
+          attendees: [],
+        }),
+      ]);
+      // Sign in once so the name is in localStorage for this origin, then
+      // arrive fresh on the shared link (the sign-in nav does not carry a hash).
+      await loginAsThrowawayUser(page, server.url);
+      // Via about:blank: navigating straight to the same path with only a hash
+      // added is not a reload, so the app would never re-mount and the
+      // auto-open effect would never run.
+      await page.goto("about:blank");
+      await page.goto(`${server.url}/index.html#e=${today}:111111`, { waitUntil: "networkidle" });
+      await page.waitForTimeout(500);
+      const installHint = page.locator("text=Razumem");
+      if (await installHint.count()) {
+        await installHint.click();
+        await page.waitForTimeout(500);
+      }
+      await page.waitForTimeout(800);
+
+      // No day card was clicked here: the event's edit control only renders for
+      // an expanded day, so its presence means the link opened the day itself.
+      await page.waitForSelector('button[aria-label="Uredi dogodek"]', { timeout: 4000 });
+      assert.ok(await page.locator("text=Dogodek Iz Povezave").count());
+      await context.close();
+    });
   } finally {
     await browser.close();
     server.close();
