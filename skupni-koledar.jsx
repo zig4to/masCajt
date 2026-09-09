@@ -21,6 +21,7 @@ import {
   SquarePlus,
   MoreVertical,
   Download,
+  ImageDown,
   Smartphone,
   Check,
   Link,
@@ -1026,6 +1027,12 @@ export function slugName(name) {
 // everyone else's and "1787431617661.jpg" tells nobody anything.
 export function photoFileName(iso, author, n) {
   return `${iso}-${slugName(author)}-${n}.jpg`;
+}
+
+// Filename for a "Deli sliko" card snapshot -- same dated-and-named reasoning
+// as photoFileName, keyed on the event's title instead of an author.
+export function eventImageFileName(iso, title) {
+  return `${iso}-${slugName(title)}.png`;
 }
 
 export function sortPhotos(list) {
@@ -2721,6 +2728,11 @@ export default function App() {
   // Id of the event whose share link was just copied -- flips the button label
   // to a confirmation for a couple of seconds, then clears itself.
   const [copiedEventId, setCopiedEventId] = useState(null);
+  // "Deli sliko": { iso, id, status: "rendering"|"ready"|"error", blob?, url?,
+  // file?, canShare? }, or null when the preview is closed.
+  const [shareImage, setShareImage] = useState(null);
+  // The off-screen card instance that gets rasterised for shareImage.
+  const snapshotRef = useRef(null);
   // Attendee chips currently playing an animation: chip id -> "in" | "out".
   // Only ever holds the one or two chips mid-flight; entries are cleared as
   // each animation lands.
@@ -2822,15 +2834,16 @@ export default function App() {
   useEffect(() => {
     if (!editingEvent) return;
     function onPointerDown(e) {
-      // The delete confirmation is a sheet of its own and sits outside the
-      // form in the DOM. Answering it must not also count as leaving.
-      if (deletingEvent) return;
+      // The delete confirmation and the "Deli sliko" preview are each a sheet
+      // of their own, sitting outside the form in the DOM. Acting in one must
+      // not also count as leaving the form.
+      if (deletingEvent || shareImage) return;
       if (e.target && e.target.closest && e.target.closest("[data-event-form]")) return;
       cancelEditingEvent();
     }
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [editingEvent, deletingEvent]);
+  }, [editingEvent, deletingEvent, shareImage]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -3868,6 +3881,7 @@ export default function App() {
     setEventMoveHideBannerDraft(false);
     setShowEventMore(false);
     setCopiedEventId(null);
+    closeShareImage();
     setEventStartDraft("");
     setEventEndDraft("");
   }
@@ -3893,6 +3907,96 @@ export default function App() {
       setError("Povezave ni bilo mogoče kopirati. Povezava: " + url);
     }
   }
+
+  // "Deli sliko": open the preview (which mounts the off-screen card), then
+  // rasterise it. Kept apart from copyEventLink because a card snapshot is a
+  // different job -- a picture for people who never open the app -- and it
+  // needs a preview step, since what it produces is not obvious up front.
+  function openShareImage(iso, id) {
+    setShareImage({ iso, id, status: "rendering" });
+  }
+  function closeShareImage() {
+    setShareImage((s) => {
+      if (s && s.url) URL.revokeObjectURL(s.url);
+      return null;
+    });
+  }
+  async function shareImageNative() {
+    const s = shareImage;
+    if (!s || s.status !== "ready" || !s.file) return;
+    try {
+      await navigator.share({ files: [s.file], title: s.title || "Dogodek" });
+    } catch (e) {
+      // The user backing out of the share sheet rejects with AbortError --
+      // not a failure, nothing to report.
+    }
+  }
+  function saveShareImage() {
+    const s = shareImage;
+    if (!s || s.status !== "ready" || !s.blob) return;
+    saveBlob(s.blob, s.file ? s.file.name : "dogodek.png");
+  }
+
+  // Rasterise the off-screen card once the preview has mounted it. modern-
+  // screenshot is fetched only here (same on-demand pattern as fflate for zip
+  // downloads) -- it renders via an SVG <foreignObject>, which is what keeps
+  // the diagonal image wedge's clip-path/mask and the Rubik webfont intact.
+  useEffect(() => {
+    if (!shareImage || shareImage.status !== "rendering") return;
+    let off = false;
+    (async () => {
+      try {
+        const node = snapshotRef.current && snapshotRef.current.firstElementChild;
+        if (!node) throw new Error("snapshot node not mounted");
+        // The webfont has to be in before the raster, or the text falls back
+        // to Arial in the PNG only.
+        await document.fonts.ready;
+        await new Promise((r) => requestAnimationFrame(() => r()));
+        const { domToBlob } = await import(
+          "https://esm.sh/modern-screenshot@4.7.0"
+        );
+        const blob = await domToBlob(node, {
+          type: "image/png",
+          scale: 2,
+          backgroundColor:
+            getComputedStyle(document.body).backgroundColor || "#FAF9F6",
+        });
+        if (off) return;
+        const title =
+          (dayEvents[shareImage.iso] || []).find((e) => e.id === shareImage.id)
+            ?.title || "";
+        const file = new File(
+          [blob],
+          eventImageFileName(shareImage.iso, title),
+          { type: "image/png" }
+        );
+        const canShare =
+          typeof navigator !== "undefined" &&
+          !!navigator.canShare &&
+          navigator.canShare({ files: [file] });
+        const url = URL.createObjectURL(blob);
+        setShareImage((s) => {
+          // Closed or restarted while we were rasterising -- drop the blob url
+          // rather than leak it.
+          if (!s || s.status !== "rendering") {
+            URL.revokeObjectURL(url);
+            return s;
+          }
+          return { ...s, status: "ready", blob, url, file, title, canShare };
+        });
+      } catch (e) {
+        console.error("Deli sliko: render failed", e);
+        if (!off) {
+          setShareImage((s) =>
+            s && s.status === "rendering" ? { ...s, status: "error" } : s
+          );
+        }
+      }
+    })();
+    return () => {
+      off = true;
+    };
+  }, [shareImage?.status, shareImage?.iso, shareImage?.id]);
 
   // Every row an event owns is addressed by the day it sits on, so moving
   // the event means carrying its comments and its photos across with it.
@@ -5961,7 +6065,14 @@ export default function App() {
   // `onlyId` narrows the day to a single event. "Naslednji dogodek" needs it:
   // it stands for one event, and the day that event falls on may hold others
   // that are not the one being pointed at.
-  function renderEventSection(iso, { reminder = false, onlyId = null } = {}) {
+  // `snapshot` renders a card meant to be rasterised for "Deli sliko": it
+  // implies the reminder look (no pencil, no "+ Dodaj dogodek") and on top of
+  // that drops every interactive bit that means nothing in a still image --
+  // the "Potrdi udeležbo" prompt and the whole comment/needs thread.
+  function renderEventSection(
+    iso,
+    { reminder = false, onlyId = null, snapshot = false } = {}
+  ) {
     const dayList = dayEvents[iso] || [];
     const events = onlyId != null ? dayList.filter((e) => e.id === onlyId) : dayList;
     // Never the reminder copy. It carries no edit button of its own, but the
@@ -6252,20 +6363,28 @@ export default function App() {
                 onChange={(e) => setEventKeywordDraft(e.target.value)}
               />
               {existing && (
-                <button
-                  style={styles.eventShareButton}
-                  onClick={() => copyEventLink(iso, id)}
-                >
-                  {copiedEventId === id ? (
-                    <>
-                      <Check size={12} /> Povezava kopirana
-                    </>
-                  ) : (
-                    <>
-                      <Share size={12} /> Deli dogodek
-                    </>
-                  )}
-                </button>
+                <div style={styles.shareRow}>
+                  <button
+                    style={styles.eventShareButton}
+                    onClick={() => copyEventLink(iso, id)}
+                  >
+                    {copiedEventId === id ? (
+                      <>
+                        <Check size={12} /> Povezava kopirana
+                      </>
+                    ) : (
+                      <>
+                        <Share size={12} /> Deli dogodek
+                      </>
+                    )}
+                  </button>
+                  <button
+                    style={styles.eventShareButton}
+                    onClick={() => openShareImage(iso, id)}
+                  >
+                    <ImageDown size={12} /> Deli sliko
+                  </button>
+                </div>
               )}
             </div>
           )}
@@ -6387,7 +6506,7 @@ export default function App() {
                   "you're going" state: once you're on the list your own chip
                   below says so, and it is also how you take it back. Two
                   controls for one fact would just leave them to disagree. */}
-              {!attending && !ghosts.includes(name) && (
+              {!snapshot && !attending && !ghosts.includes(name) && (
                 <div style={styles.attendRow}>
                   <span style={styles.attendPrompt}>Potrdi udeležbo</span>
                   <button
@@ -6428,7 +6547,9 @@ export default function App() {
                   })}
                 </div>
               )}
-              {renderCommentThread(
+              {/* No thread in a "Deli sliko" snapshot -- the shared card is a
+                  still of the plan, not the conversation around it. */}
+              {!snapshot && renderCommentThread(
                 iso,
                 event.id,
                 "plan",
@@ -6824,6 +6945,64 @@ export default function App() {
     </div>
   );
 
+  // The off-screen card that gets rasterised, plus its preview sheet. Both
+  // rendered outside the event form's subtree (like deleteEventModal) so a
+  // click on the sheet does not read as "left the form". The hidden card is
+  // pushed far off to the left rather than hidden with opacity/visibility --
+  // modern-screenshot reads the root node's computed style, and a hidden root
+  // would rasterise to nothing.
+  const shareImageSnapshot = shareImage && (
+    <div
+      ref={snapshotRef}
+      aria-hidden="true"
+      style={{ position: "fixed", left: "-10000px", top: 0, width: 390 }}
+    >
+      {renderEventSection(shareImage.iso, {
+        reminder: true,
+        snapshot: true,
+        onlyId: shareImage.id,
+      })}
+    </div>
+  );
+
+  const shareImageModal = shareImage && (
+    <div style={styles.centerOverlay} onClick={closeShareImage}>
+      <div style={styles.noticeCard} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalEyebrow}>Deli sliko dogodka</div>
+        {shareImage.status === "rendering" && (
+          <p style={styles.confirmText}>Pripravljam sliko …</p>
+        )}
+        {shareImage.status === "error" && (
+          <p style={styles.confirmText}>
+            Slike ni bilo mogoče ustvariti. Poskusi znova.
+          </p>
+        )}
+        {shareImage.status === "ready" && (
+          <img
+            src={shareImage.url}
+            alt="Predogled slike dogodka"
+            style={styles.sharePreviewImg}
+          />
+        )}
+        <div style={styles.confirmActions}>
+          <button style={styles.cancelButton} onClick={closeShareImage}>
+            Zapri
+          </button>
+          {shareImage.status === "ready" && shareImage.canShare && (
+            <button style={styles.lightboxAction} onClick={shareImageNative}>
+              <Share size={12} /> Deli
+            </button>
+          )}
+          {shareImage.status === "ready" && (
+            <button style={styles.lightboxAction} onClick={saveShareImage}>
+              <Download size={12} /> Shrani
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   if (view === "archive") {
     // The same shell the calendar uses, so the navbar sits identically on
     // both pages and the desktop width limit does not stop at the boundary
@@ -6841,6 +7020,8 @@ export default function App() {
         {settingsModal}
         {photoNoticeModal}
         {deleteEventModal}
+        {shareImageSnapshot}
+        {shareImageModal}
       </div>
     );
   }
@@ -7234,6 +7415,8 @@ export default function App() {
         {settingsModal}
         {photoNoticeModal}
         {deleteEventModal}
+        {shareImageSnapshot}
+        {shareImageModal}
       </div>
     );
   }
@@ -7601,6 +7784,8 @@ export default function App() {
       {settingsModal}
       {photoNoticeModal}
       {deleteEventModal}
+      {shareImageSnapshot}
+      {shareImageModal}
     </div>
   );
 }

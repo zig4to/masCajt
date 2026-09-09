@@ -302,6 +302,62 @@ async function runTest(name, fn) {
       );
       await context.close();
     });
+
+    await runTest("'Deli sliko' renders a card snapshot into the preview sheet", async () => {
+      const context = await browser.newContext({ viewport: { width: 480, height: 900 } });
+      const page = await context.newPage();
+      const today = localToday();
+      await mockKvStore(page, [
+        eventRow(today, "111111", {
+          title: "Piknik ob Savi",
+          description: "Prinesite dobro voljo.",
+          duration: "18:00–20:00",
+          createdBy: "Test Uporabnik",
+          attendees: ["Test Uporabnik"],
+        }),
+      ]);
+      await loginAsThrowawayUser(page, server.url);
+      await openToday(page);
+      await page.click('button[aria-label="Uredi dogodek"]');
+      await page.waitForTimeout(300);
+      await page.click("text=Več možnosti");
+      await page.waitForTimeout(200);
+      await page.click("text=Deli sliko");
+
+      // The sheet opens immediately with a "rendering" line, then swaps in the
+      // generated image once modern-screenshot (loaded on demand from esm.sh)
+      // has rasterised the off-screen card. Generous timeout: first run pays
+      // for the dynamic import.
+      await page.waitForSelector("text=Pripravljam sliko", { timeout: 4000 });
+      const preview = page.locator('img[alt="Predogled slike dogodka"]');
+      await preview.waitFor({ state: "visible", timeout: 20000 });
+      const src = await preview.getAttribute("src");
+      assert.ok(src && src.startsWith("blob:"), `preview src should be a blob url, got ${src}`);
+
+      // The generated PNG really is a PNG.
+      const isPng = await page.evaluate(async (u) => {
+        const buf = new Uint8Array(await (await fetch(u)).arrayBuffer());
+        return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+      }, src);
+      assert.ok(isPng, "preview blob should carry the PNG signature");
+
+      // The off-screen snapshot card is a still of the plan: no comment toggle,
+      // no "Potrdi udeležbo" prompt.
+      const snapshotHtml = await page.evaluate(() => {
+        const hidden = [...document.querySelectorAll('div[aria-hidden="true"]')].find(
+          (d) => d.textContent.includes("Piknik ob Savi")
+        );
+        return hidden ? hidden.innerHTML : "";
+      });
+      assert.ok(snapshotHtml, "off-screen snapshot card should be mounted");
+      assert.ok(!snapshotHtml.includes("Potrdi udeležbo"), "snapshot must not show the attend prompt");
+      assert.ok(!/>\(\d+\)</.test(snapshotHtml), "snapshot must not show the comment count toggle");
+
+      await page.click("text=Zapri");
+      await page.waitForTimeout(200);
+      assert.equal(await preview.count(), 0, "preview sheet should close");
+      await context.close();
+    });
   } finally {
     await browser.close();
     server.close();

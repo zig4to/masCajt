@@ -1076,13 +1076,12 @@ export const styles = {
     padding: "4px 8px",
     cursor: "pointer",
   },
-  // "Deli dogodek" in the "Več možnosti" drawer. Same outlined shape as the
-  // delete button but green, and pinned to the start rather than stretched,
-  // so it reads as one more discrete action and not a full-width field.
+  // "Deli dogodek" / "Deli sliko" in the "Več možnosti" drawer. Outlined green
+  // chips, sitting side by side in shareRow rather than stretched, so they read
+  // as two discrete actions and not full-width fields.
   eventShareButton: {
     display: "flex",
     alignItems: "center",
-    alignSelf: "flex-start",
     gap: 4,
     fontSize: 11.5,
     fontWeight: 600,
@@ -1092,6 +1091,19 @@ export const styles = {
     borderRadius: 7,
     padding: "4px 8px",
     cursor: "pointer",
+  },
+  // Wraps rather than squeezes the two chips on a narrow phone.
+  shareRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  // The generated card image inside the "Deli sliko" preview sheet.
+  sharePreviewImg: {
+    width: "100%",
+    borderRadius: 12,
+    display: "block",
+    margin: "4px 0",
   },
   modeRow: {
     display: "flex",

@@ -96,6 +96,18 @@ test("eventKey: normal id", () => {
   assert.equal(key, "avail:2026-08-27:__event__1699999999999");
 });
 
+test("eventImageFileName: dated + slugged title, šumniki folded, blank falls back", () => {
+  assert.equal(
+    m.eventImageFileName("2026-09-15", "Odbojka ob Savi"),
+    "2026-09-15-odbojka-ob-savi.png"
+  );
+  assert.equal(
+    m.eventImageFileName("2026-09-15", "Čevapi & Žar"),
+    "2026-09-15-cevapi-zar.png"
+  );
+  assert.equal(m.eventImageFileName("2026-09-15", ""), "2026-09-15-neznano.png");
+});
+
 test("eventShareHash / parseEventShareHash round-trip", () => {
   const hash = m.eventShareHash("2026-09-15", "1737000000000");
   assert.equal(hash, "#e=2026-09-15:1737000000000");
