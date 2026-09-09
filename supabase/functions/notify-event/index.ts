@@ -11,8 +11,13 @@
 // The key is re-checked here regardless. The trigger is not the only thing
 // that can reach a public function URL.
 //
-// Deploy: Supabase dashboard -> Edge Functions -> Deploy a new function, name
-// it "notify-event", paste this in. Then set the three secrets listed below.
+// Deploy: Supabase dashboard -> Edge Functions -> notify-event -> Edit. Select
+// everything already in the editor and delete it first, THEN paste this whole
+// file. Pasting below the existing contents leaves two copies in one file and
+// the worker dies on boot with "Identifier 'webpush' has already been
+// declared" and every call 503s -- which is exactly how this function sat
+// silently dead, sending nothing to anyone. After deploying, set the three
+// secrets listed below.
 //
 // An editor here will flag "Cannot find name 'Deno'" and the npm: imports.
 // That is expected and not worth fixing: this file never runs against the
@@ -29,11 +34,28 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
-webpush.setVapidDetails(
-  Deno.env.get("VAPID_SUBJECT") ?? "mailto:tina.brdnik@gmail.com",
-  Deno.env.get("VAPID_PUBLIC_KEY")!,
-  Deno.env.get("VAPID_PRIVATE_KEY")!
-);
+// Configured once, but guarded: setVapidDetails throws on a missing or
+// malformed key, and at module scope that throw is a boot failure -- the
+// whole function then 503s on every call with nothing in the logs pointing
+// at the keys. Caught here instead, so a bad secret becomes a plain logged
+// line from the handler below and the rest of the function still loads.
+let vapidError = "";
+try {
+  const pub = Deno.env.get("VAPID_PUBLIC_KEY");
+  const priv = Deno.env.get("VAPID_PRIVATE_KEY");
+  if (!pub || !priv) {
+    vapidError =
+      "VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are not set in the function secrets";
+  } else {
+    webpush.setVapidDetails(
+      Deno.env.get("VAPID_SUBJECT") ?? "mailto:tina.brdnik@gmail.com",
+      pub,
+      priv
+    );
+  }
+} catch (e) {
+  vapidError = `setVapidDetails rejected the keys: ${String(e)}`;
+}
 
 // Mirrors skupni-koledar.jsx. A day's events, comments and photos all live
 // under the "avail:" prefix with a reserved person segment; only one of them
@@ -69,6 +91,11 @@ Deno.serve(async (req) => {
   }
 
   if (body.type !== "INSERT") return ok(`ignored: ${body.type}`);
+
+  // No point re-reading the event and walking the subscription list if there
+  // is no way to sign a push. Surfaced as an ordinary log line rather than a
+  // boot crash (see the setVapidDetails guard above).
+  if (vapidError) return ok(`cannot send push: ${vapidError}`);
 
   const key = body.record?.key ?? "";
   const parts = key.split(":");

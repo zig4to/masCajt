@@ -5490,8 +5490,7 @@ export default function App() {
           {pushState === "on" ? (
             <>
               <p style={styles.introText}>
-                Ta naprava je prijavljena na obvestila. Pošiljanje še ni
-                vklopljeno — zaenkrat samo preverjamo, ali prijava deluje.
+                Ta naprava je prijavljena na obvestila o novih dogodkih.
               </p>
               <button
                 style={styles.introSecondaryButton}
