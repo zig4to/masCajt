@@ -3886,24 +3886,41 @@ export default function App() {
     setEventEndDraft("");
   }
 
-  // Build a link straight to this event and drop it on the clipboard. The URL
-  // is rebuilt from the current location every time rather than stored, so it
-  // always points at wherever the app is actually served from. Only offered
-  // for a saved event -- the hash needs the event's id, which does not exist
-  // until it has been written once.
+  // "Deli dogodek": build a link straight to this event, hand it to the
+  // native share sheet where there is one (so it can go to any app in one
+  // step), and always drop it on the clipboard too so the link is in hand
+  // whichever channel is picked -- or if the sheet is dismissed. The URL is
+  // rebuilt from the current location every time rather than stored, so it
+  // always points at wherever the app is served from. Only offered for a
+  // saved event -- the hash needs an id, which exists only after a first save.
   async function copyEventLink(iso, id) {
     const url =
       window.location.origin +
       window.location.pathname +
       eventShareHash(iso, id);
-    const ok = await copyText(url);
+    const title =
+      (dayEvents[iso] || []).find((e) => e.id === id)?.title || "Dogodek";
+    // Both started off the same tap, neither awaited before the other, so both
+    // still run inside the tap's activation. navigator.share needs a secure
+    // context (HTTPS or localhost); over a plain-http LAN address it is absent
+    // and this is just a copy, as before.
+    const copyPromise = copyText(url);
+    if (navigator.share) {
+      try {
+        await navigator.share({ url, title });
+      } catch (e) {
+        // AbortError -- the sheet was dismissed. The link is on the clipboard
+        // anyway, nothing more to do.
+      }
+    }
+    const ok = await copyPromise;
     if (ok) {
       setCopiedEventId(id);
       setTimeout(
         () => setCopiedEventId((c) => (c === id ? null : c)),
         2000
       );
-    } else {
+    } else if (!navigator.share) {
       setError("Povezave ni bilo mogoče kopirati. Povezava: " + url);
     }
   }
