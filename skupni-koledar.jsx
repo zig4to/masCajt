@@ -3913,7 +3913,23 @@ export default function App() {
   // different job -- a picture for people who never open the app -- and it
   // needs a preview step, since what it produces is not obvious up front.
   function openShareImage(iso, id) {
-    setShareImage({ iso, id, status: "rendering" });
+    // Snapshot at the width the card actually has on this screen, measured off
+    // the open edit form (same styles.eventCard box). Its own padding + border
+    // are subtracted so the rasterised card lands at the same outer width the
+    // person sees, not 28px wider. Falls back to a phone-ish column.
+    let width = Math.min((window.innerWidth || 400) - 32, 400);
+    const formEl = document.querySelector("[data-event-form]");
+    if (formEl) {
+      const cs = getComputedStyle(formEl);
+      const chrome =
+        parseFloat(cs.paddingLeft) +
+        parseFloat(cs.paddingRight) +
+        parseFloat(cs.borderLeftWidth) +
+        parseFloat(cs.borderRightWidth);
+      const inner = formEl.getBoundingClientRect().width - chrome;
+      if (inner > 0) width = Math.round(inner);
+    }
+    setShareImage({ iso, id, status: "rendering", width });
   }
   function closeShareImage() {
     setShareImage((s) => {
@@ -3924,6 +3940,16 @@ export default function App() {
   async function shareImageNative() {
     const s = shareImage;
     if (!s || s.status !== "ready" || !s.file) return;
+    // Web Share with files needs a secure context (HTTPS or localhost) and a
+    // supporting browser -- not there on a plain-http LAN address or on most
+    // desktops. Say so rather than silently doing nothing.
+    if (
+      !navigator.share ||
+      (navigator.canShare && !navigator.canShare({ files: [s.file] }))
+    ) {
+      setError("Deljenje slike na tej napravi ni na voljo — uporabi Shrani.");
+      return;
+    }
     try {
       await navigator.share({ files: [s.file], title: s.title || "Dogodek" });
     } catch (e) {
@@ -3970,10 +3996,6 @@ export default function App() {
           eventImageFileName(shareImage.iso, title),
           { type: "image/png" }
         );
-        const canShare =
-          typeof navigator !== "undefined" &&
-          !!navigator.canShare &&
-          navigator.canShare({ files: [file] });
         const url = URL.createObjectURL(blob);
         setShareImage((s) => {
           // Closed or restarted while we were rasterising -- drop the blob url
@@ -3982,7 +4004,7 @@ export default function App() {
             URL.revokeObjectURL(url);
             return s;
           }
-          return { ...s, status: "ready", blob, url, file, title, canShare };
+          return { ...s, status: "ready", blob, url, file, title };
         });
       } catch (e) {
         console.error("Deli sliko: render failed", e);
@@ -6955,7 +6977,12 @@ export default function App() {
     <div
       ref={snapshotRef}
       aria-hidden="true"
-      style={{ position: "fixed", left: "-10000px", top: 0, width: 390 }}
+      style={{
+        position: "fixed",
+        left: "-10000px",
+        top: 0,
+        width: shareImage.width || 360,
+      }}
     >
       {renderEventSection(shareImage.iso, {
         reminder: true,
@@ -6988,7 +7015,7 @@ export default function App() {
           <button style={styles.cancelButton} onClick={closeShareImage}>
             Zapri
           </button>
-          {shareImage.status === "ready" && shareImage.canShare && (
+          {shareImage.status === "ready" && (
             <button style={styles.lightboxAction} onClick={shareImageNative}>
               <Share size={12} /> Deli
             </button>
