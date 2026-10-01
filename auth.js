@@ -20,7 +20,9 @@ function prevediNapako(msg) {
   msg = msg || "Nekaj je šlo narobe.";
   if (/Invalid login credentials/i.test(msg)) return "Napačna e-pošta ali geslo.";
   if (/signup_not_allowed|database error saving new user/i.test(msg))
-    return "Ta e-poštni naslov ni na seznamu povabljenih.";
+    return readInvite()
+      ? "Povezava z vabilom ni več veljavna. Prosi za novo."
+      : "Za registracijo potrebuješ povezavo z vabilom.";
   if (/already registered|already been registered|user already exists/i.test(msg))
     return "Ta e-pošta je že registrirana. Prijavi se.";
   if (/Password should be at least|at least 6/i.test(msg)) return "Geslo mora imeti vsaj 6 znakov.";
@@ -32,6 +34,31 @@ function prevediNapako(msg) {
   if (/rate limit|too many|after \d+ seconds|for security purposes/i.test(msg))
     return "Preveč poskusov. Počakaj malo in poskusi znova.";
   return msg;
+}
+
+// Koda vabila iz povezave ?vabilo=<koda> -- ista kot v hubu (tabela
+// invite_codes v ProjektiBaze, preverja jo sprožilec ob registraciji).
+// Isti ključ v localStorage kot hub: izvor je skupen, zato vabilo, odprto
+// v hubu, velja tudi tu in obratno. Iz naslova jo odstranimo, da ne obtiči
+// v zaznamkih ali nameščeni aplikaciji.
+const INVITE_KEY = "ptomsetu-invite";
+function readInvite() {
+  try {
+    return localStorage.getItem(INVITE_KEY);
+  } catch (e) {
+    return null;
+  }
+}
+function captureInvite() {
+  try {
+    const params = new URLSearchParams(location.search);
+    const code = params.get("vabilo");
+    if (!code) return;
+    localStorage.setItem(INVITE_KEY, code);
+    params.delete("vabilo");
+    const qs = params.toString();
+    history.replaceState(null, "", location.pathname + (qs ? "?" + qs : "") + location.hash);
+  } catch (e) {}
 }
 
 // Napaka iz povezave v e-pošti (npr. potekla povezava za ponastavitev) pride
@@ -91,6 +118,7 @@ export async function requireSignIn(sb) {
   const recSubmit = $("recoverySubmit");
   const recErr = $("recoveryError");
 
+  captureInvite();
   let recovering = location.hash.indexOf("type=recovery") !== -1;
   let pendingError = readHashError();
   let mode = "signin";
@@ -136,7 +164,8 @@ export async function requireSignIn(sb) {
     forgotBtn.hidden = signup;
     passEl.autocomplete = signup ? "new-password" : "current-password";
   }
-  setMode("signin");
+  // S povezavo z vabilom pride nekdo, da se registrira.
+  setMode(readInvite() ? "signup" : "signin");
 
   toggleBtn.addEventListener("click", () => setMode(mode === "signin" ? "signup" : "signin"));
 
@@ -152,19 +181,28 @@ export async function requireSignIn(sb) {
     }
     submitBtn.disabled = true;
     try {
+      const invite = readInvite();
       const res =
         mode === "signup"
           ? await sb.auth.signUp({
               email,
               password,
-              options: { emailRedirectTo: location.origin + location.pathname },
+              options: {
+                emailRedirectTo: location.origin + location.pathname,
+                ...(invite ? { data: { invite } } : {}),
+              },
             })
           : await sb.auth.signInWithPassword({ email, password });
       if (res.error) {
         errEl.textContent = prevediNapako(res.error.message);
-      } else if (mode === "signup" && res.data?.user && !res.data.session) {
-        setMode("signin");
-        noteEl.textContent = "Račun je ustvarjen. Potrdi e-pošto, nato se prijavi.";
+      } else if (mode === "signup") {
+        try {
+          localStorage.removeItem(INVITE_KEY);
+        } catch (e) {}
+        if (res.data?.user && !res.data.session) {
+          setMode("signin");
+          noteEl.textContent = "Račun je ustvarjen. Potrdi e-pošto, nato se prijavi.";
+        }
       }
     } catch (err) {
       errEl.textContent = prevediNapako(String(err?.message || err));
