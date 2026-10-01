@@ -103,8 +103,12 @@ every `push:*` subscription row except the event's creator.
   alternative and why it didn't work — match that style rather than restating what the code does.
 - The UI text is Slovenian; keep new user-facing strings in Slovenian and consistent with the existing
   tone (informal/friendly).
-- `ADMIN_NAME`/`AUTH_CODE` (top of `skupni-koledar.jsx`) gate admin-only actions; there is no real
-  authentication system, just a shared PIN.
+- Access requires a Supabase Auth account (`auth.js`, e-mail + password, same accounts and project —
+  ProjektiBaze — as the TomStudios hub). `index.html` awaits `requireSignIn()` before rendering the app;
+  arriving from the hub signs in automatically (`#sb_at`/`#sb_rt` hash, or the session the hub left in
+  localStorage on the shared `zig4to.github.io` origin). RLS grants `kv_store` only to `authenticated`.
+  The person's calendar *name* is still chosen per device (`my-name`), deliberately not taken from the
+  account. `ADMIN_NAME`/`AUTH_CODE` (top of `skupni-koledar.jsx`) still gate admin-only actions.
 - Never put a Supabase `service_role` key in client code (`index.html`, `skupni-koledar.jsx`, or
   `supabase-schema.sql`) — only the `anon`/publishable key belongs there. The service_role key exists only
   in the Edge Function's environment (Supabase dashboard secrets).

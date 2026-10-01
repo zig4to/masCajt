@@ -19,7 +19,13 @@ alter table kv_store enable row level security;
 -- the base grant or every request fails with "permission denied for table".
 -- The project has "Automatically expose new tables" turned off (which is
 -- what would otherwise issue this grant implicitly), so it's explicit here.
-grant select, insert, update, delete on table kv_store to anon;
+--
+-- Only "authenticated": the calendar sits behind Supabase Auth (auth.js),
+-- with the same accounts as the TomStudios hub. anon gets no grant at all,
+-- so the policies below -- written without a role, i.e. for everyone --
+-- never reach a visitor who is not signed in.
+grant select, insert, update, delete on table kv_store to authenticated;
+revoke all on table kv_store from anon;
 
 -- Policies are scoped to the "avail:" prefix rather than the whole table,
 -- so any other key namespace added later isn't public by default.
@@ -75,12 +81,15 @@ values (
 )
 on conflict (id) do nothing;
 
-create policy "arhiv: nalaganje"
-  on storage.objects for insert to anon
+-- Uploads only for signed-in users. Read stays public (a public bucket): the
+-- <img> tags load by plain URL, and the paths are only ever learned from
+-- kv_store, which itself is behind sign-in.
+create policy "arhiv: nalaganje prijavljeni"
+  on storage.objects for insert to authenticated
   with check (bucket_id = 'arhiv');
 
--- Deliberately no delete policy for anon. Read is public and there is no
--- login, so a delete grant would let any visitor destroy every photo -- and
+-- Deliberately no delete policy. Every signed-in member is equal here, so a
+-- delete grant would let any one of them destroy every photo -- and
 -- unlike an availability entry, nobody has a second copy to retype it from.
 -- Removing a photo from the app deletes its kv_store row, which takes it out
 -- of the archive and leaves the file orphaned; purging files is a dashboard

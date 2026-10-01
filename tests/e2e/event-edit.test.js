@@ -35,7 +35,34 @@ async function mockKvStore(page, rows) {
   });
 }
 
+// The calendar only renders behind a Supabase Auth session (auth.js). A
+// session supabase-js finds in localStorage, unexpired, is used as-is with no
+// network call, so a fake one gets past the sign-in screen without touching
+// the real project; any auth request that does go out is answered locally.
+async function fakeSignedInSession(page) {
+  await page.route("**/auth/v1/**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "{}" })
+  );
+  await page.addInitScript(() => {
+    const b64 = (o) => btoa(JSON.stringify(o)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+    const exp = Math.floor(Date.now() / 1000) + 3600;
+    const user = { id: "00000000-0000-0000-0000-000000000001", email: "test@example.com", aud: "authenticated", role: "authenticated" };
+    localStorage.setItem(
+      "sb-abjnxhfxjolwwxlckkje-auth-token",
+      JSON.stringify({
+        access_token: `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: user.id, role: "authenticated", exp })}.x`,
+        refresh_token: "test-refresh",
+        token_type: "bearer",
+        expires_in: 3600,
+        expires_at: exp,
+        user,
+      })
+    );
+  });
+}
+
 async function loginAsThrowawayUser(page, baseUrl) {
+  await fakeSignedInSession(page);
   await page.goto(`${baseUrl}/index.html`, { waitUntil: "networkidle" });
   await page.fill('input[placeholder="Ime"]', "Test");
   await page.fill('input[placeholder="Priimek"]', "Uporabnik");

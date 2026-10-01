@@ -22,6 +22,68 @@
          the default it starts on. -->
     <meta name="theme-color" content="#14181A" />
 
+    <script>
+      // Prijavni zaslon se pokaže pred aplikacijo, zato mora temo (shranjeno
+      // v localStorage pod "skupni-koledar:theme") prebrati sam, sicer bi
+      // svetla tema utripnila v temni.
+      try {
+        var t = localStorage.getItem("skupni-koledar:theme");
+        document.documentElement.setAttribute("data-theme", t === "light" ? "light" : "dark");
+      } catch (e) {}
+    </script>
+    <style>
+      /* Prijava / nova gesla -- barve iz THEME_CSS v skupni-koledar.jsx. */
+      :root {
+        --a-bg: #14181a; --a-card: #1d2321; --a-input: #191f1d; --a-text: #e7ebe6;
+        --a-soft: #a6b0a9; --a-muted: #8a968e; --a-border: #2a302e;
+        --a-border-input: #3a423e; --a-green: #4fa88e; --a-red: #e15a5a;
+      }
+      :root[data-theme="light"] {
+        --a-bg: #faf9f6; --a-card: #ffffff; --a-input: #fdfcfa; --a-text: #233029;
+        --a-soft: #5b6862; --a-muted: #8a9a91; --a-border: #eeede7;
+        --a-border-input: #e3e1d9; --a-green: #2f6f5e; --a-red: #b23434;
+      }
+      .auth-screen[hidden], .auth-loading[hidden] { display: none; }
+      .auth-screen, .auth-loading {
+        min-height: 100vh; min-height: 100dvh; box-sizing: border-box;
+        display: flex; align-items: center; justify-content: center;
+        padding: 24px 16px; background: var(--a-bg); color: var(--a-text);
+        font-family: Rubik, system-ui, sans-serif;
+      }
+      .auth-loading { color: var(--a-muted); font-size: 14px; }
+      .auth-card {
+        width: 100%; max-width: 360px; box-sizing: border-box; padding: 28px 24px;
+        background: var(--a-card); border: 1px solid var(--a-border); border-radius: 18px;
+        text-align: center;
+      }
+      .auth-card img { width: 64px; height: 64px; border-radius: 16px; }
+      .auth-brand { margin: 12px 0 2px; font-size: 22px; font-weight: 700; }
+      .auth-sub { margin: 0 0 18px; color: var(--a-soft); font-size: 15px; }
+      .auth-card form { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+      .auth-card label { font-size: 13px; color: var(--a-soft); margin-bottom: -4px; }
+      .auth-card input {
+        width: 100%; box-sizing: border-box; padding: 12px 14px; font: inherit; font-size: 16px;
+        color: var(--a-text); background: var(--a-input);
+        border: 1px solid var(--a-border-input); border-radius: 12px;
+      }
+      .auth-card input:focus-visible { outline: 2px solid var(--a-green); outline-offset: 1px; }
+      .auth-primary {
+        margin-top: 4px; padding: 12px; font: inherit; font-weight: 600; font-size: 15px;
+        color: #fff; background: var(--a-green); border: none; border-radius: 12px; cursor: pointer;
+      }
+      .auth-primary:disabled { opacity: .6; cursor: default; }
+      .auth-link {
+        align-self: flex-end; padding: 2px 0; font: inherit; font-size: 13px;
+        color: var(--a-soft); background: none; border: none; cursor: pointer;
+        text-decoration: underline; text-underline-offset: 2px;
+      }
+      .auth-link[hidden] { display: none; }
+      .auth-toggle { align-self: center; margin-top: 14px; }
+      .auth-error, .auth-note { margin: 0; font-size: 13px; line-height: 1.4; }
+      .auth-error { color: var(--a-red); }
+      .auth-note { color: var(--a-soft); }
+      .auth-error:empty, .auth-note:empty { display: none; }
+    </style>
     <style>
       /* The app paints its own background, but only inside its root element.
          Standalone on iOS there is no browser behind it, so overscrolling
@@ -57,6 +119,43 @@
     <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
   </head>
   <body>
+    <div id="authLoading" class="auth-loading">Nalagam …</div>
+
+    <section id="authScreen" class="auth-screen" hidden>
+      <div class="auth-card">
+        <img src="./icon-192.png" alt="" />
+        <h1 class="auth-brand">Garaža Klub Koledar</h1>
+        <p class="auth-sub" id="authTitle">Prijava</p>
+        <form id="authForm" autocomplete="on">
+          <label for="authEmail">E-pošta</label>
+          <input id="authEmail" type="email" autocomplete="email" required />
+          <label for="authPassword">Geslo</label>
+          <input id="authPassword" type="password" autocomplete="current-password" minlength="6" required />
+          <button id="authForgot" class="auth-link" type="button">Pozabljeno geslo?</button>
+          <p class="auth-error" id="authError" role="alert"></p>
+          <p class="auth-note" id="authNote"></p>
+          <button id="authSubmit" class="auth-primary" type="submit">Prijava</button>
+        </form>
+        <button id="authToggle" class="auth-link auth-toggle" type="button">Nimaš računa? Registracija</button>
+      </div>
+    </section>
+
+    <section id="recoveryScreen" class="auth-screen" hidden>
+      <div class="auth-card">
+        <img src="./icon-192.png" alt="" />
+        <h1 class="auth-brand">Garaža Klub Koledar</h1>
+        <p class="auth-sub">Nastavi novo geslo</p>
+        <form id="recoveryForm">
+          <label for="recoveryPassword">Novo geslo</label>
+          <input id="recoveryPassword" type="password" autocomplete="new-password" minlength="6" required />
+          <label for="recoveryPassword2">Ponovi geslo</label>
+          <input id="recoveryPassword2" type="password" autocomplete="new-password" minlength="6" required />
+          <p class="auth-error" id="recoveryError" role="alert"></p>
+          <button id="recoverySubmit" class="auth-primary" type="submit">Shrani geslo</button>
+        </form>
+      </div>
+    </section>
+
     <div id="root"></div>
     <script type="module">
       import { createClient } from "@supabase/supabase-js";
@@ -69,6 +168,14 @@
       const SUPABASE_URL = "https://abjnxhfxjolwwxlckkje.supabase.co";
       const SUPABASE_ANON_KEY = "sb_publishable_8Rl8haZMviVCMdJ-byVlGg_ZbaCk7mA";
       const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      // Brez prijave ni koledarja: RLS spušča do kv_store in arhiva samo
+      // prijavljene (glej auth.js). Iz huba TomStudios se to zgodi samo.
+      const { requireSignIn } = await import("./auth.js");
+      await requireSignIn(supabase);
+      // Za gumb "Odjava" v aplikaciji -- odjavi račun; onAuthStateChange v
+      // auth.js nato osveži stran na prijavni zaslon.
+      window.authSignOut = () => supabase.auth.signOut({ scope: "local" });
 
       // "my-name" stays on this device only (no reason to sync your own
       // name across browsers) via localStorage. Everything under the

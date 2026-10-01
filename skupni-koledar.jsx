@@ -3670,6 +3670,9 @@ export default function App() {
     } catch (e) {
       console.error("logout storage error:", e);
     }
+    // Odjavi še račun (isti kot v TomStudios); stran se nato osveži na
+    // prijavni zaslon. Brez index.html (testi) te funkcije ni.
+    if (window.authSignOut) await window.authSignOut();
   }
 
   async function submitName(first, last) {
