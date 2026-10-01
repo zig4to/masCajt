@@ -148,7 +148,7 @@ begin
   -- literal '__event__' marker should reach the function.
   if new.key like 'avail:%:\_\_event\_\_%' then
     perform net.http_post(
-      url := 'https://mpiliybdfhgqslubvhwd.supabase.co/functions/v1/notify-event',
+      url := 'https://abjnxhfxjolwwxlckkje.supabase.co/functions/v1/notify-event',
       body := jsonb_build_object(
         'type', 'INSERT',
         'record', jsonb_build_object('key', new.key, 'value', new.value)
@@ -158,7 +158,7 @@ begin
       -- service_role.
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer sb_publishable_3888vcj_lpaerHs9H74Llg_-0p1W_MC'
+        'Authorization', 'Bearer sb_publishable_8Rl8haZMviVCMdJ-byVlGg_ZbaCk7mA'
       ),
       timeout_milliseconds := 5000
     );
