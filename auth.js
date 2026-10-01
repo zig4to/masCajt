@@ -21,7 +21,7 @@ function prevediNapako(msg) {
   if (/Invalid login credentials/i.test(msg)) return "Napačna e-pošta ali geslo.";
   if (/signup_not_allowed|database error saving new user/i.test(msg))
     return readInvite()
-      ? "Povezava z vabilom ni več veljavna. Prosi za novo."
+      ? "Povezava z vabilom je že porabljena ali ni veljavna. Prosi za novo."
       : "Za registracijo potrebuješ povezavo z vabilom.";
   if (/already registered|already been registered|user already exists/i.test(msg))
     return "Ta e-pošta je že registrirana. Prijavi se.";
