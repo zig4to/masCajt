@@ -23,23 +23,25 @@ alter table kv_store enable row level security;
 -- Only "authenticated": the calendar sits behind Supabase Auth (auth.js),
 -- with the same accounts as the TomStudios hub. anon gets no grant at all,
 -- so the policies below -- written without a role, i.e. for everyone --
--- never reach a visitor who is not signed in.
+-- never reach a visitor who is not signed in. Being signed in is not enough
+-- either: every policy also requires has_app_access('mascajt'), granted per
+-- user by an admin in the TomStudios hub (TomsStudios/supabase/005_admin.sql).
 grant select, insert, update, delete on table kv_store to authenticated;
 revoke all on table kv_store from anon;
 
 -- Policies are scoped to the "avail:" prefix rather than the whole table,
 -- so any other key namespace added later isn't public by default.
 create policy "public read avail" on kv_store
-  for select using (key like 'avail:%');
+  for select using (key like 'avail:%' and public.has_app_access('mascajt'));
 
 create policy "public insert avail" on kv_store
-  for insert with check (key like 'avail:%');
+  for insert with check (key like 'avail:%' and public.has_app_access('mascajt'));
 
 create policy "public update avail" on kv_store
-  for update using (key like 'avail:%') with check (key like 'avail:%');
+  for update using (key like 'avail:%' and public.has_app_access('mascajt')) with check (key like 'avail:%' and public.has_app_access('mascajt'));
 
 create policy "public delete avail" on kv_store
-  for delete using (key like 'avail:%');
+  for delete using (key like 'avail:%' and public.has_app_access('mascajt'));
 
 -- Live updates -------------------------------------------------------------
 -- Publishing the table over Realtime is what makes its row changes reach
@@ -86,7 +88,7 @@ on conflict (id) do nothing;
 -- kv_store, which itself is behind sign-in.
 create policy "arhiv: nalaganje prijavljeni"
   on storage.objects for insert to authenticated
-  with check (bucket_id = 'arhiv');
+  with check (bucket_id = 'arhiv' and public.has_app_access('mascajt'));
 
 -- Deliberately no delete policy. Every signed-in member is equal here, so a
 -- delete grant would let any one of them destroy every photo -- and
@@ -114,16 +116,16 @@ create policy "arhiv: nalaganje prijavljeni"
 -- and the names in these rows are already public in the calendar itself. The
 -- only thing select exposes is how many devices exist and their endpoint URLs.
 create policy "push select" on kv_store
-  for select using (key like 'push:%');
+  for select using (key like 'push:%' and public.has_app_access('mascajt'));
 
 create policy "push insert" on kv_store
-  for insert with check (key like 'push:%');
+  for insert with check (key like 'push:%' and public.has_app_access('mascajt'));
 
 create policy "push update" on kv_store
-  for update using (key like 'push:%') with check (key like 'push:%');
+  for update using (key like 'push:%' and public.has_app_access('mascajt')) with check (key like 'push:%' and public.has_app_access('mascajt'));
 
 create policy "push delete" on kv_store
-  for delete using (key like 'push:%');
+  for delete using (key like 'push:%' and public.has_app_access('mascajt'));
 
 -- The Edge Function that sends push notifications connects as service_role,
 -- which bypasses RLS but is still subject to table privileges -- the same two

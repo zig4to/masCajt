@@ -43,6 +43,10 @@ async function fakeSignedInSession(page) {
   await page.route("**/auth/v1/**", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: "{}" })
   );
+  // The per-app access check (auth.js requireAppAccess) -- always granted here.
+  await page.route("**/rest/v1/rpc/has_app_access**", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: "true" })
+  );
   await page.addInitScript(() => {
     const b64 = (o) => btoa(JSON.stringify(o)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
     const exp = Math.floor(Date.now() / 1000) + 3600;

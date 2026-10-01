@@ -156,6 +156,15 @@
       </div>
     </section>
 
+    <section id="noAccessScreen" class="auth-screen" hidden>
+      <div class="auth-card">
+        <img src="./icon-192.png" alt="" />
+        <h1 class="auth-brand">Garaža Klub Koledar</h1>
+        <p class="auth-sub">Nimaš dostopa do Dogodkov. Za dostop se obrni na administratorja.</p>
+        <button id="noAccessSignOut" class="auth-primary" type="button" style="width:100%">Odjava</button>
+      </div>
+    </section>
+
     <div id="root"></div>
     <script type="module">
       import { createClient } from "@supabase/supabase-js";

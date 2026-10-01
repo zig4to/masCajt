@@ -277,5 +277,24 @@ export async function requireSignIn(sb) {
     if (data?.session) done(data.session);
     else showAuth();
   }
-  return signedIn;
+  const session = await signedIn;
+  await requireAppAccess(sb);
+  return session;
+}
+
+// Prijavljen še ne pomeni dovoljen: admin v hubu dodeli dostop do Dogodkov
+// (has_app_access v ProjektiBaze, supabase/005_admin.sql v TomStudios).
+// Prava zaščita so politike RLS na kv_store; to je le prijazno sporočilo
+// namesto praznega koledarja. Ob napaki (npr. funkcije še ni) pustimo naprej.
+async function requireAppAccess(sb) {
+  let allowed = true;
+  try {
+    const { data, error } = await sb.rpc("has_app_access", { p_app: "mascajt" });
+    if (!error && data === false) allowed = false;
+  } catch (e) {}
+  if (allowed) return;
+  $("authLoading").hidden = true;
+  $("noAccessScreen").hidden = false;
+  $("noAccessSignOut").addEventListener("click", () => sb.auth.signOut({ scope: "local" }));
+  await new Promise(() => {}); // koledarja ne izrišemo; odjava osveži stran
 }

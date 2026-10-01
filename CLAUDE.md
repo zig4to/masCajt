@@ -108,7 +108,9 @@ every `push:*` subscription row except the event's creator.
   arriving from the hub signs in automatically (`#sb_at`/`#sb_rt` hash, or the session the hub left in
   localStorage on the shared `zig4to.github.io` origin). RLS grants `kv_store` only to `authenticated`.
   The person's calendar *name* is still chosen per device (`my-name`), deliberately not taken from the
-  account. `ADMIN_NAME`/`AUTH_CODE` (top of `skupni-koledar.jsx`) still gate admin-only actions.
+  account. Access is also per user: RLS policies require `has_app_access('mascajt')`, which an admin
+  grants in the TomStudios hub (Administracija); `auth.js` shows a "no access" screen otherwise.
+  `ADMIN_NAME`/`AUTH_CODE` (top of `skupni-koledar.jsx`) still gate admin-only actions.
 - Never put a Supabase `service_role` key in client code (`index.html`, `skupni-koledar.jsx`, or
   `supabase-schema.sql`) — only the `anon`/publishable key belongs there. The service_role key exists only
   in the Edge Function's environment (Supabase dashboard secrets).
