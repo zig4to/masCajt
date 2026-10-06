@@ -2,7 +2,11 @@
   "name": "mascajt-tests",
   "private": true,
   "type": "commonjs",
+  "config": {
+    "port": 8085
+  },
   "scripts": {
+    "start": "node serve.js",
     "test:unit": "node --test \"tests/unit/**/*.test.js\"",
     "test:e2e": "node tests/e2e/event-edit.test.js",
     "test": "npm run test:unit && npm run test:e2e"
