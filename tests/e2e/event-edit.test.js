@@ -152,6 +152,8 @@ async function runTest(name, fn) {
       assert.equal(await page.locator('input[placeholder="Ime dogodka"]').inputValue(), "Test Dogodek");
       assert.equal(await page.locator('input[aria-label="Začetek dogodka"]').inputValue(), "18:00");
       assert.equal(await page.locator('input[aria-label="Konec dogodka"]').inputValue(), "20:00");
+      // Quick editing has no description; it lives under Napredno urejanje.
+      await page.click("text=Napredno urejanje");
       assert.equal(await page.locator('textarea[placeholder="Opis dogodka"]').inputValue(), "Opis testa");
       await page.close();
     });
@@ -179,6 +181,8 @@ async function runTest(name, fn) {
       assert.equal(await page.locator('input[placeholder="Ime dogodka"]').inputValue(), "Odbojka");
       assert.equal(await page.locator('input[aria-label="Začetek dogodka"]').inputValue(), "20:00");
       assert.equal(await page.locator('input[aria-label="Konec dogodka"]').inputValue(), "22:00");
+      // Quick editing has no description; it lives under Napredno urejanje.
+      await page.click("text=Napredno urejanje");
       assert.equal(await page.locator('textarea[placeholder="Opis dogodka"]').inputValue(), "Poden");
       await page.close();
     });
@@ -245,7 +249,28 @@ async function runTest(name, fn) {
       await page.close();
     });
 
-    await runTest("share button in 'Več možnosti' copies a deep link to this event", async () => {
+    await runTest("a press outside an open event form leaves it open, draft intact", async () => {
+      // Regression: a press anywhere outside the form used to close it and
+      // throw the draft away -- easy to do by accident on a phone.
+      const page = await browser.newPage({ viewport: { width: 480, height: 900 } });
+      await mockKvStore(page, []);
+      await loginAsThrowawayUser(page, server.url);
+      await openToday(page);
+
+      await page.click("text=+ Dodaj dogodek");
+      await page.waitForTimeout(200);
+      await page.fill('input[placeholder="Ime dogodka"]', "Napol napisan");
+      // Somewhere well away from the form: the page heading.
+      await page.click("text=Pregled tedna");
+      await page.waitForTimeout(200);
+
+      const title = page.locator('input[placeholder="Ime dogodka"]');
+      assert.equal(await title.count(), 1);
+      assert.equal(await title.inputValue(), "Napol napisan");
+      await page.close();
+    });
+
+    await runTest("share button in 'Napredno urejanje' copies a deep link to this event", async () => {
       const context = await browser.newContext({
         viewport: { width: 480, height: 900 },
         permissions: ["clipboard-read", "clipboard-write"],
@@ -265,7 +290,7 @@ async function runTest(name, fn) {
       await openToday(page);
       await page.click('button[aria-label="Uredi dogodek"]');
       await page.waitForTimeout(300);
-      await page.click("text=Več možnosti");
+      await page.click("text=Napredno urejanje");
       await page.waitForTimeout(200);
       await page.click("text=Deli dogodek");
 
@@ -351,7 +376,7 @@ async function runTest(name, fn) {
       await openToday(page);
       await page.click('button[aria-label="Uredi dogodek"]');
       await page.waitForTimeout(300);
-      await page.click("text=Več možnosti");
+      await page.click("text=Napredno urejanje");
       await page.waitForTimeout(200);
       await page.click("text=Deli sliko");
 

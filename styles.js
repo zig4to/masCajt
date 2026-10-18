@@ -86,6 +86,11 @@ const eventCardLabel = {
   color: "var(--text-secondary)",
 };
 
+// One height for every row of the event form -- fields, toggles, the
+// checkbox, the share buttons -- so the form lines up as a column of equal
+// rows. 46px: a comfortable thumb target that still fits a phone's card.
+const EVENT_FIELD_HEIGHT = 46;
+
 export const styles = {
   page: {
     minHeight: "100vh",
@@ -832,7 +837,7 @@ export const styles = {
   // Rendered as a <button> (it opens the event's day), so it carries the
   // usual button resets: without them the card would pick up the UA's font
   // and centre its text.
-  recentEventCard: (hue, dragging, isToday, contentHeight) => ({
+  recentEventCard: (hue, dragging, contentHeight, wide) => ({
     font: "inherit",
     color: "inherit",
     textAlign: "left",
@@ -842,63 +847,71 @@ export const styles = {
     // Square keeps a row of three (or the sliding run) even; but one or two
     // wide cards forced square just tower over their own text, so there they
     // shrink to fit what's written in them instead.
-    aspectRatio: contentHeight ? "auto" : "1",
+    //
+    // `wide` is two across (a phone): there the card takes its height from
+    // its text, with no empty bottom under the four rows. height: 100% keeps
+    // the run even all the same -- the track is a flex row, so every slot
+    // stretches to the tallest card, and each card then fills its slot.
+    aspectRatio: contentHeight || wide ? "auto" : "1",
+    height: wide && !contentHeight ? "100%" : undefined,
     width: "100%",
     minWidth: 0,
     boxSizing: "border-box",
     borderRadius: 14,
-    padding: 10,
+    padding: "8px 10px",
     display: "flex",
     flexDirection: "column",
     justifyContent: "flex-start",
-    gap: 4,
+    // Stretch, said outright: the rows came out flex-start here, sized to
+    // their own text, so a long name ran past the card's edge instead of
+    // stopping at its padding -- and never reached the ellipsis.
+    alignItems: "stretch",
+    gap: 3,
     background: `rgba(${hue}, 0.16)`,
     border: `1px solid rgba(${hue}, 0.32)`,
     boxShadow: `0 8px 18px -9px rgba(${hue}, 0.28), 0 1px 4px rgba(20, 30, 25, 0.05)`,
     overflow: "hidden",
-    // Tonight's card breathes, so the one event that cannot wait is the one
-    // the eye lands on. The keyframes are in THEME_CSS, which is also where
-    // the reduced-motion version of them lives.
-    animation: isToday ? "todayPulse 2.6s ease-in-out infinite" : "none",
+    // No pulse on tonight's card any more: it breathed to catch the eye,
+    // and read instead as a card that kept reloading while the rest sat.
   }),
-  // The card is a fixed square, so its vertical budget is fixed too. A card
-  // that also shows a keyword has one more row to fit, and a title wrapping
-  // to a second line is what pushes the keyword out; clamp it to one line
-  // and ellipsize. Without a keyword there's room to spare, so a long name
-  // is better wrapped over two lines than cut short.
-  //
-  // The two clamps use different mechanisms on purpose: -webkit-box is the
-  // only way to ellipsize at a line *count*, but at one line it can't
-  // ellipsize a single word longer than the card (it just clips), which
-  // nowrap + text-overflow handles correctly.
-  recentEventTitle: (singleLine) => ({
-    fontSize: 14,
+  // The card is a fixed square, so its vertical budget is fixed too: four
+  // rows (name, day, time, place) and no more. So the name is always one
+  // line, cut with an ellipsis -- a two-line name used to push the rows
+  // under it out of the square. nowrap + text-overflow rather than a
+  // -webkit-box clamp, which at one line just clips a single word that is
+  // longer than the card instead of ellipsizing it.
+  recentEventTitle: {
+    fontSize: 15,
     fontWeight: 800,
     color: "var(--text-heading)",
     lineHeight: 1.2,
-    marginBottom: 2,
+    marginBottom: 1,
     minWidth: 0,
     overflow: "hidden",
-    ...(singleLine
-      ? { textOverflow: "ellipsis", whiteSpace: "nowrap" }
-      : {
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-        }),
-  }),
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  // Written-out weekday ("Sobota, 24.10"). Allowed a second line, unlike the
+  // name: "Ponedeljek, 19.10" is wider than a phone's card, and cut to
+  // "Ponedeljek, …" it lost the one part that cannot be guessed. The square
+  // has the room for it under the place row.
   recentEventDate: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: 600,
     color: "var(--text-muted)",
+    lineHeight: 1.25,
+    overflow: "hidden",
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
   },
   recentEventTime: {
     fontSize: 16,
     fontWeight: 800,
     color: "var(--text-heading)",
   },
-  recentEventKeyword: {
-    fontSize: 11.5,
+  recentEventPlace: {
+    fontSize: 12.5,
     fontWeight: 600,
     color: "var(--text-secondary)",
     overflow: "hidden",
@@ -1117,11 +1130,13 @@ export const styles = {
     padding: "4px 8px",
     cursor: "pointer",
   },
-  // "Deli dogodek" / "Deli sliko" in the "Več možnosti" drawer. Two outlined
-  // green buttons on one row, each taking half of it (flex: 1), a bit larger
-  // than the other drawer controls so the pair reads as the main share action.
-  eventShareButton: {
+  // "Deli dogodek" / "Deli sliko" at the foot of the advanced form. Two
+  // outlined green buttons on one row, each taking half of it (flex: 1), as
+  // tall as every other row in the form.
+  eventShareButtonTall: {
     flex: 1,
+    height: EVENT_FIELD_HEIGHT,
+    boxSizing: "border-box",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -1132,8 +1147,8 @@ export const styles = {
     color: GREEN,
     background: GREEN_BG,
     border: `1px solid ${GREEN}`,
-    borderRadius: 8,
-    padding: "9px 10px",
+    borderRadius: 12,
+    padding: "0 10px",
     cursor: "pointer",
   },
   shareRow: {
@@ -1365,7 +1380,6 @@ export const styles = {
     display: "flex",
     alignItems: "center",
     gap: 8,
-    marginBottom: 14,
   },
   eventTimeSep: {
     fontSize: 13,
@@ -1481,34 +1495,228 @@ export const styles = {
   // object-fit: cover with the position pinned right means a photo of any
   // shape fills the wedge and is cropped rather than squashed, and never
   // reaches past it.
-  // The extra fields, once the row above has been opened. Ruled off and
-  // inset, so the form reads as a short one with a drawer rather than as a
-  // long one that happens to be folded.
-  eventMorePanel: {
+  // Quick / advanced, as a segmented control at the head of the form: one
+  // tray, the chosen half filled green. The same height as the fields under
+  // it, so the form is one rhythm from top to bottom.
+  eventModeTabs: {
     display: "flex",
-    flexDirection: "column",
-    gap: 8,
-    paddingLeft: 10,
-    borderLeft: "2px solid var(--divider)",
+    gap: 4,
+    padding: 4,
+    margin: "10px 0 14px",
+    borderRadius: 12,
+    background: "var(--input-bg)",
+    border: "1.5px solid var(--border-input)",
   },
-  // One collapsible control under "Več možnosti". Closed it is a quiet
-  // outlined row in the stack; open it becomes a card with a solid green
-  // header, so at a glance exactly one option reads as the open one.
-  eventOption: (open) => ({
+  eventModeTab: (active) => ({
+    flex: 1,
+    height: EVENT_FIELD_HEIGHT - 11,
+    border: "none",
+    borderRadius: 9,
+    fontSize: 13,
+    fontWeight: 700,
+    color: active ? "#fff" : "var(--text-secondary)",
+    background: active ? GREEN : "transparent",
+    cursor: "pointer",
+  }),
+  // The form's column: one gap between every row, instead of each field
+  // carrying its own bottom margin.
+  eventFields: {
     display: "flex",
     flexDirection: "column",
-    borderRadius: 10,
-    overflow: "hidden",
-    border: open ? `1.5px solid ${GREEN}` : "1px solid var(--border)",
-    background: open ? GREEN_BG : "transparent",
-  }),
-  eventOptionToggle: (open) => ({
+    gap: 12,
+    marginBottom: 14,
+  },
+  // A small caption over its field, the field inside the label so a tap on
+  // the caption focuses it.
+  eventFieldLabel: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 5,
+    fontSize: 11,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: "var(--text-muted)",
+  },
+  // Every single-line field in the form: the app's input, at one fixed
+  // height and without the margin it carries elsewhere. Text resets because
+  // it sits inside an uppercase label.
+  eventField: {
+    width: "100%",
+    height: EVENT_FIELD_HEIGHT,
+    boxSizing: "border-box",
+    padding: "0 14px",
+    fontSize: 16,
+    fontWeight: 400,
+    textTransform: "none",
+    letterSpacing: "normal",
+    fontFamily: "inherit",
+    borderRadius: 12,
+    border: "1.5px solid var(--border-input)",
+    outline: "none",
+    background: "var(--input-bg)",
+    color: "var(--text)",
+  },
+  // The two times share the row. minWidth 0, or a time input's intrinsic
+  // width keeps it from shrinking and the pair overflows a narrow card.
+  eventTimeField: {
+    flex: 1,
+    minWidth: 0,
+    width: "auto",
+    height: EVENT_FIELD_HEIGHT,
+    boxSizing: "border-box",
+    padding: "0 12px",
+    fontSize: 16,
+    fontWeight: 400,
+    fontFamily: "inherit",
+    borderRadius: 12,
+    border: "1.5px solid var(--border-input)",
+    outline: "none",
+    background: "var(--input-bg)",
+    color: "var(--text)",
+  },
+  // Taller than a field by design -- a description is a few lines -- but
+  // the same border, corner and type.
+  eventTextarea: {
+    width: "100%",
+    minHeight: EVENT_FIELD_HEIGHT * 2,
+    boxSizing: "border-box",
+    resize: "vertical",
+    padding: "12px 14px",
+    fontSize: 16,
+    fontWeight: 400,
+    textTransform: "none",
+    letterSpacing: "normal",
+    fontFamily: "inherit",
+    lineHeight: 1.4,
+    borderRadius: 12,
+    border: "1.5px solid var(--border-input)",
+    outline: "none",
+    background: "var(--input-bg)",
+    color: "var(--text)",
+  },
+  // "Dodaj opis" / "Uredi opis" in quick mode: words and an icon, no box.
+  // It was a dashed row the height of a field, and stood out as much as the
+  // fields themselves for something most events skip.
+  eventAddRow: {
+    alignSelf: "flex-start",
     display: "flex",
     alignItems: "center",
     gap: 6,
+    padding: "2px 0",
+    fontSize: 13,
+    fontWeight: 600,
+    color: GREEN,
+    background: "transparent",
+    border: "none",
+    cursor: "pointer",
+  },
+  // Prekliči / Dodaj (Shrani) at the foot of the event form. The save takes
+  // more of the row than cancel: it is the one the form is for.
+  eventFormActions: {
+    display: "flex",
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  // Red outline on a red tint: backing out, said in colour, without the
+  // weight of the solid green beside it.
+  eventFormCancel: {
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    height: EVENT_FIELD_HEIGHT,
+    boxSizing: "border-box",
+    fontSize: 14,
+    fontWeight: 700,
+    color: RED,
+    background: RED_BG,
+    border: `1.5px solid ${RED}`,
+    borderRadius: 12,
+    cursor: "pointer",
+  },
+  // Still green while it cannot be pressed (no name yet), only faded: a grey
+  // button there would read as a different button rather than as this one
+  // waiting for a name.
+  eventFormSave: (enabled) => ({
+    flex: 1.5,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    height: EVENT_FIELD_HEIGHT,
+    boxSizing: "border-box",
+    fontSize: 14.5,
+    fontWeight: 800,
+    color: "#fff",
+    background: GREEN,
+    border: "none",
+    borderRadius: 12,
+    boxShadow: enabled ? `0 6px 14px -8px ${GREEN}` : "none",
+    opacity: enabled ? 1 : 0.45,
+    cursor: enabled ? "pointer" : "default",
+    transition: "opacity 150ms ease",
+  }),
+  // Delete, set apart under its own rule at the foot of the form.
+  eventFormDeleteRow: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTop: "1px solid var(--divider)",
+  },
+  // A full-width row like every other in the form, red in a plain outline --
+  // lighter than Prekliči's tint, because it is the one to reach for least.
+  eventFormDelete: {
     width: "100%",
-    padding: "9px 11px",
-    fontSize: 12.5,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    height: EVENT_FIELD_HEIGHT,
+    boxSizing: "border-box",
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: RED,
+    background: "transparent",
+    border: `1px dashed ${RED}`,
+    borderRadius: 12,
+    cursor: "pointer",
+  },
+  // Rules off the advanced half from the fields every event has.
+  // A size up from the field captions under it (11px), so it reads as the
+  // heading of the section they belong to rather than as one more caption.
+  eventSectionLabel: {
+    paddingTop: 14,
+    borderTop: "1px solid var(--divider)",
+    fontSize: 14,
+    fontWeight: 800,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    color: GREEN,
+  },
+  // One collapsible control in the advanced form (picture, move). Closed it
+  // wears the share buttons' look -- green tint, green rule, green label --
+  // so every button in the form is one kind of thing and the fields are
+  // another. Open, its header goes solid green, so exactly one option reads
+  // as the open one.
+  eventOption: (open) => ({
+    display: "flex",
+    flexDirection: "column",
+    borderRadius: 12,
+    overflow: "hidden",
+    border: open ? `1.5px solid ${GREEN}` : `1px solid ${GREEN}`,
+    background: GREEN_BG,
+  }),
+  eventOptionToggleTall: (open) => ({
+    display: "flex",
+    alignItems: "center",
+    gap: 7,
+    width: "100%",
+    // The border is the option's, so this is the field height less it.
+    height: EVENT_FIELD_HEIGHT - 2,
+    padding: "0 14px",
+    fontSize: 13.5,
     fontWeight: open ? 700 : 600,
     color: open ? "#fff" : GREEN,
     background: open ? GREEN : "transparent",
@@ -1532,16 +1740,52 @@ export const styles = {
   // target, which is what a thumb needs, and the browser gives the pairing
   // to a screen reader without any aria of ours. The box itself is drawn by
   // .appCheck in THEME_CSS -- :checked and ::after are not inline styles.
-  eventCheckRow: {
+  eventCheckRowTall: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
-    fontSize: 12.5,
+    gap: 10,
+    height: EVENT_FIELD_HEIGHT,
+    boxSizing: "border-box",
+    fontSize: 13.5,
     fontWeight: 600,
-    color: "var(--text-strong)",
+    // Dressed as the buttons beside it rather than as a bordered caption.
+    color: GREEN,
+    background: GREEN_BG,
     cursor: "pointer",
-    padding: "9px 11px",
-    border: "1px solid var(--border)",
+    padding: "0 14px",
+    border: `1px solid ${GREEN}`,
+    borderRadius: 12,
+  },
+  // The check row and the explanation its (i) unfolds, kept together so the
+  // form's gap does not open up between them.
+  eventCheckGroup: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+  },
+  // Pushed to the row's right edge. Outlined when its text is open, so the
+  // row says which of the two states it is in.
+  eventInfoButton: (open) => ({
+    marginLeft: "auto",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 30,
+    height: 30,
+    padding: 0,
+    borderRadius: "50%",
+    color: GREEN,
+    background: open ? "var(--input-bg)" : "transparent",
+    border: open ? `1px solid ${GREEN}` : "1px solid transparent",
+    cursor: "pointer",
+  }),
+  eventInfoText: {
+    margin: 0,
+    padding: "10px 12px",
+    fontSize: 12.5,
+    lineHeight: 1.45,
+    color: "var(--text-secondary)",
+    background: "var(--input-bg)",
     borderRadius: 10,
   },
   eventImageRow: {
@@ -1599,6 +1843,23 @@ export const styles = {
     color: "var(--text-strong)",
     lineHeight: 1.4,
     margin: 0,
+  },
+  // The description's size and colour, a touch bolder, with a pin in front:
+  // one line that answers "kje", sitting just above the longer text.
+  eventPlace: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 5,
+    fontSize: 13,
+    fontWeight: 600,
+    color: "var(--text-strong)",
+    lineHeight: 1.4,
+    margin: 0,
+  },
+  // Nudged down to sit on the first line of a place that wraps.
+  eventPlaceIcon: {
+    flexShrink: 0,
+    marginTop: 2,
   },
   // Prompt and button on one line. Only rendered while you are *not* on the
   // list, so there is no "already confirmed" state to style -- confirming

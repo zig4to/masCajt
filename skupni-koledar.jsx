@@ -10,6 +10,7 @@ import {
   Users,
   ChevronRight,
   ChevronLeft,
+  MapPin,
   Pencil,
   Eraser,
   Trash2,
@@ -43,6 +44,7 @@ import {
   Star,
   X,
   CloudLightning,
+  Info,
 } from "lucide-react";
 import {
   styles,
@@ -306,25 +308,6 @@ const THEME_CSS = `
     }
   }
 
-  /* Tonight's card on the event strip, breathing. Small enough to be caught
-     at the edge of the eye rather than to pull it: the strip is something
-     you glance at on the way past, and a card that insisted would be worse
-     than one that sat still. Here because @keyframes cannot be written as an
-     inline style.
-
-     The scale stays inside the viewport's 4px top padding, so the card grows
-     without being clipped by the strip's own overflow. */
-  @keyframes todayPulse {
-    0%, 100% { transform: scale(1); }
-    50%      { transform: scale(1.04); }
-  }
-  /* Asked for less motion: the card keeps its place and simply stops
-     breathing. Nothing is lost by that -- it already says "Danes". */
-  @media (prefers-reduced-motion: reduce) {
-    @keyframes todayPulse {
-      0%, 100% { transform: none; }
-    }
-  }
   /* The loader: a green bar that runs the length of its track and starts
      again. Indeterminate on purpose -- the window query has no progress to
      report, so a bar that filled would be inventing one. It lives here
@@ -810,6 +793,9 @@ export function decodeEvent(raw, id) {
       id,
       title: parsed.title || "",
       description: parsed.description || "",
+      // Where it happens. Free text ("Pri Jerneju", "Šmarna gora") rather
+      // than an address or a map link -- the link field is there for that.
+      place: parsed.place || "",
       keyword: parsed.keyword || "",
       link: parsed.link || "",
       image: parsed.image || "",
@@ -1583,13 +1569,18 @@ function useIsDesktop(breakpoint = 860) {
   }, [breakpoint]);
   return isDesktop;
 }
+// "Aktualni dogodki" cards across the strip. Two on a phone: at three, a
+// card a third of the screen wide had room for a name of about ten letters
+// and cut nearly every one. The desktop keeps three -- two across its width
+// would be two billboards.
 const CARDS_IN_VIEW = 3;
+const CARDS_IN_VIEW_PHONE = 2;
 
-// Three across, the same as the events strip above it. Four fitted, but a
-// picture is not a label -- it has to be big enough to recognise a face in,
-// and at a quarter of a phone's width it was a swatch. Sharing the count
-// also lines the two strips up: the same column edges down the page, rather
-// than two runs that nearly agree.
+// Three across. Four fitted, but a picture is not a label -- it has to be
+// big enough to recognise a face in, and at a quarter of a phone's width it
+// was a swatch. It used to share its count with the events strip above so
+// the columns lined up; that strip went to two on a phone, and a photo at
+// half the width is more picture than the strip is for.
 const PHOTOS_IN_VIEW = 3;
 
 // How many people's initials a collapsed day row shows before collapsing the
@@ -1627,10 +1618,10 @@ export function archiveInitialLower(today) {
 
 // Days the home list shows before it stops. A week: far enough to answer
 // "are you free this weekend" and short enough that the page still ends
-// somewhere. The window behind it is still the full fourteen -- this only
+// somewhere. The window behind it is the full WINDOW_DAYS -- this only
 // decides how much of it is on screen, so nothing about loading, the event
-// strip or the archive changes, and the button below the list still reaches
-// the rest.
+// strip or the archive changes, and the calendar under the list reaches the
+// rest.
 // Hand-kept, newest day first. Written from the commit log but not out of
 // it: a commit says what changed in the code, and this has to say what
 // changed for someone opening the calendar. There is no build step here to
@@ -1645,6 +1636,17 @@ const CHANGELOG = [
       "Seznam kaže vedno sedem dni, izbran dan pa se pokaže pod črto",
       "Pregled tedna: dnevi od ponedeljka do četrtka so nižji, vikend ostane velik",
       "Petek, sobota in nedelja imajo diskretno značko Vikend",
+      "Aktualni dogodki kažejo vse dogodke v naslednjih 30 dneh",
+      "Na telefonu sta v traku Aktualni dogodki naenkrat vidna dva dogodka",
+      "Današnja kartica v traku ne utripa več",
+      "Dodajanje in urejanje dogodka: hitri ali napredni vnos, vsa polja urejena in enako visoka",
+      "Obrazec za dogodek se ob kliku drugam ne zapre več, zapre ga Prekliči ali Shrani",
+      "Opis se ureja v naprednem urejanju, pri hitrem vnosu je le diskreten Dodaj opis",
+      "Ključne besede pri dogodku ni več",
+      "Gumbi pri dogodku: zelen Shrani, rdeč Prekliči in ločen Izbriši dogodek",
+      "Ikona (i) pri Kva rabmo pove, kaj ta seznam naredi",
+      "Dogodku lahko dodaš kraj, prikaže se nad opisom",
+      "Kartice Aktualni dogodki: ime, dan z datumom, ura in kraj, vsak v svoji vrstici",
       "Na računalniku je koledar za cel mesec, s puščicama listaš po mesecih",
       "Naslednji dogodek se pokaže zgoraj, tudi če je več kot dva tedna naprej",
       "Ime in priimek se vzameta iz tvojega računa, vpisovati ju ni več treba",
@@ -1726,6 +1728,13 @@ const CHANGELOG = [
 
 const DAYS_SHOWN = 7;
 
+// How far ahead the calendar loads on arrival, today included. A month, so
+// "Aktualni dogodki" can show everything planned in the next thirty days --
+// not just the next two weeks, which left a Saturday three weeks out off the
+// strip entirely. The week list still shows only DAYS_SHOWN of them; the rest
+// is there for the strip, the calendar's marks and a day picked from it.
+const WINDOW_DAYS = 30;
+
 // Column heads of the month grid, Monday first to match monthGridCells.
 const MONTH_GRID_WEEKDAYS = ["pon", "tor", "sre", "čet", "pet", "sob", "ned"];
 
@@ -1738,9 +1747,11 @@ const SWIPE_THRESHOLD_PX = 40;
 // average, because a jump spends most of its six seconds standing still and
 // a drift never does -- matching the old rate exactly reads as restless.
 //
-// A card is a third of the strip, so on a 390px phone this is about 14px a
-// second. Raise it to hurry the strip along, lower it to calm it down.
+// Counted against a three-across card, so on a 390px phone this is about
+// 14px a second whatever the strip shows -- see the scaling where it is
+// applied. Raise it to hurry the strip along, lower it to calm it down.
 const DRIFT_CARDS_PER_SEC = 0.12;
+const CARDS_IN_VIEW_DRIFT_BASE = 3;
 
 // How long the strip holds still before it starts, counted from the moment
 // there is something on it to read.
@@ -2147,7 +2158,10 @@ function useDriftingStrip(count, perView, drift = true) {
       // even while still, so letting go resumes rather than lurching forward
       // by however long the pause lasted.
       if (!dragging && driftFromRef.current && now >= driftFromRef.current && last) {
-        offsetRef.current += ((now - last) / 1000) * DRIFT_CARDS_PER_SEC;
+        // Scaled by how many cards are in view, so wider cards (two across
+        // on a phone) drift at the same pace on screen rather than faster.
+        offsetRef.current +=
+          ((now - last) / 1000) * DRIFT_CARDS_PER_SEC * (CARDS_IN_VIEW_DRIFT_BASE / perView);
         // Past the last real slot the strip is standing on the copies of the
         // first ones, which look identical -- so stepping back a whole list
         // here is invisible, and is what makes the loop endless.
@@ -2348,7 +2362,14 @@ function AlternatingReminder({ pages, renderPage, autoRotate, intervalMs = 7000 
   );
 }
 
-function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) {
+function RecentEventsCarousel({
+  events,
+  eventHues,
+  onSelectDay,
+  today,
+  drift,
+  perView = CARDS_IN_VIEW,
+}) {
   const count = events.length;
   const {
     canSlide,
@@ -2358,7 +2379,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
     onPointerDown,
     wasDragged,
     extend,
-  } = useDriftingStrip(count, CARDS_IN_VIEW, drift);
+  } = useDriftingStrip(count, perView, drift);
 
   // Events in this window that were moved to another day. The move note is
   // optional, so the sentence drops the "zaradi ..." clause when there isn't
@@ -2397,9 +2418,7 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
   // is not a jump. `recentEventsTrack` turns this into the track width
   // (extended.length / trackPerView), and `slotPercent` already divides that
   // track evenly, so the slots land at half, half-and-half, or thirds.
-  const trackPerView = canSlide
-    ? CARDS_IN_VIEW
-    : Math.min(Math.max(count, 2), CARDS_IN_VIEW);
+  const trackPerView = canSlide ? perView : Math.min(Math.max(count, 2), perView);
   // One or two wide cards drop the square and take their height from the text.
   // A row of three, or the sliding run, stays square so the run reads even.
   const cardsFitContent = !canSlide && count <= 2;
@@ -2462,22 +2481,25 @@ function RecentEventsCarousel({ events, eventHues, onSelectDay, today, drift }) 
                 style={styles.recentEventCard(
                   hue,
                   dragging,
-                  ev._iso === today,
-                  cardsFitContent
+                  cardsFitContent,
+                  perView < CARDS_IN_VIEW
                 )}
                 onClick={() => {
                   if (wasDragged()) return;
                   onSelectDay?.(ev._iso);
                 }}
               >
-                <div style={styles.recentEventTitle(Boolean(ev.keyword))}>{ev.title}</div>
-                <div style={styles.recentEventDate}>
-                  {shortDateLabel(ev._iso, today)}
-                </div>
+                {/* Four rows, always in this order: name, day, time, place. The
+                    weekday is written out ("Sobota, 24.10") -- the card has
+                    the width for it, and "sob. 24.10" made you decode it.
+                    The keyword gave way to the place: the card is a fixed
+                    shape and has room for four short rows, not five. */}
+                <div style={styles.recentEventTitle}>{ev.title}</div>
+                <div style={styles.recentEventDate}>{eventWhenLabel(ev._iso, "")}</div>
                 {ev.duration && (
                   <div style={styles.recentEventTime}>{splitDuration(ev.duration).start}</div>
                 )}
-                {ev.keyword && <div style={styles.recentEventKeyword}>{ev.keyword}</div>}
+                {ev.place && <div style={styles.recentEventPlace}>{ev.place}</div>}
               </button>
             </div>
           ))}
@@ -2694,7 +2716,7 @@ export default function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [pinDraft, setPinDraft] = useState("");
   const [authError, setAuthError] = useState(false);
-  // The fixed window every visit opens on: two weeks from today. `days`
+  // The fixed window every visit opens on: WINDOW_DAYS from today. `days`
   // below is this plus whatever the month view or a picked day has asked
   // for on top, and is what everything else reads.
   const [baseDays, setBaseDays] = useState([]);
@@ -2710,11 +2732,11 @@ export default function App() {
   const [calMonth, setCalMonth] = useState(() => monthOf(todayIso()));
   // Which days of the shown month hold an event: "2026-12" -> [iso]. Read on
   // its own because on the phone most of that month is not in `days`, and
-  // without it the full calendar could only mark events in the two weeks the
+  // without it the full calendar could only mark events in the month the
   // list already shows -- exactly the ones you did not open it for.
   const [monthEventDays, setMonthEventDays] = useState({});
-  // The day of the nearest event past the two weeks, looked up only when
-  // those two weeks hold nothing after today. Without it "Naslednji dogodek"
+  // The day of the nearest event past the thirty days, looked up only when
+  // those days hold nothing after today. Without it "Naslednji dogodek"
   // and the event strip went blank for anything planned three weeks out, as
   // if nothing were planned at all.
   const [aheadIso, setAheadIso] = useState(null);
@@ -2806,9 +2828,8 @@ export default function App() {
   const [eventTitleDraft, setEventTitleDraft] = useState("");
   const [eventDescDraft, setEventDescDraft] = useState("");
   const [showEventDescInput, setShowEventDescInput] = useState(false);
-  const [eventKeywordDraft, setEventKeywordDraft] = useState("");
+  const [eventPlaceDraft, setEventPlaceDraft] = useState("");
   const [eventLinkDraft, setEventLinkDraft] = useState("");
-  const [showEventLinkInput, setShowEventLinkInput] = useState(false);
   const [eventImageDraft, setEventImageDraft] = useState("");
   const [eventImageUploading, setEventImageUploading] = useState(false);
   const [eventChecklistDraft, setEventChecklistDraft] = useState(false);
@@ -2827,7 +2848,14 @@ export default function App() {
   // Whether the form's extra fields are unfolded. Most events are a name and
   // a time, so the things below this stay out of the way until asked for --
   // on every open, including an event that already has some of them set.
-  const [showEventMore, setShowEventMore] = useState(false);
+  // "quick" | "advanced". Quick is name, time, place and an optional
+  // description -- what nearly every event is. Advanced adds everything else
+  // (a link, the list, a picture, a move, sharing), laid out flat
+  // rather than folded into a drawer.
+  const [eventFormMode, setEventFormMode] = useState("quick");
+  // The (i) beside "Kva rabmo" in the advanced form: whether its line of
+  // explanation is unfolded under the row.
+  const [showChecklistInfo, setShowChecklistInfo] = useState(false);
   const [eventStartDraft, setEventStartDraft] = useState("");
   const [eventEndDraft, setEventEndDraft] = useState("");
   // Id of the event whose share link was just copied -- flips the button label
@@ -2897,7 +2925,7 @@ export default function App() {
 
   useEffect(() => {
     const start = todayIso();
-    setBaseDays(Array.from({ length: 14 }, (_, i) => addDays(start, i)));
+    setBaseDays(Array.from({ length: WINDOW_DAYS }, (_, i) => addDays(start, i)));
   }, []);
 
   // Memoised so its identity only changes when its inputs do: loadAllData and
@@ -2924,7 +2952,7 @@ export default function App() {
 
   // Booleans rather than dayEvents itself in the effect's deps, so it asks
   // the server only when the answer can have changed: an event appearing in
-  // the two weeks (no lookahead needed), or the looked-ahead day losing its
+  // the thirty days (no lookahead needed), or the looked-ahead day losing its
   // event. An array there, empty, is a loaded day with nothing on it --
   // undefined is one not read yet, and must not count as gone or this would
   // re-ask in a loop before the day ever loads.
@@ -3021,6 +3049,13 @@ export default function App() {
     if (meta) meta.setAttribute("content", theme === "dark" ? "#14181A" : "#2F6F5E");
   }, [theme]);
 
+  // An open event form stays open until Prekliči or Dodaj / Shrani. It used to
+  // be put away by a press anywhere outside it, which threw the draft away --
+  // and on a phone that press is easy to make by accident: scrolling to the
+  // time field, brushing the strip, reaching for the keyboard's edge. Losing
+  // a half-written event to that cost more than one deliberate tap on
+  // Prekliči ever does.
+
   // Closing on any pointer down outside the menu, rather than on the menu
   // losing focus: the panel's own buttons take focus as you move through it,
   // and a blur handler would shut it before the click it was blurring for
@@ -3030,30 +3065,6 @@ export default function App() {
   // Up here with the other hooks, not down beside the markup it belongs to:
   // App returns early while loading and while signed out, and a hook declared
   // past those returns runs on some renders and not others.
-  // An open event form is put away by a press anywhere outside it -- another
-  // day, the strip, the page itself. Matched by attribute rather than by a
-  // ref, because the same form is rendered from more than one place (a day
-  // card, and tomorrow's reminder copy) and one ref cannot point at whichever
-  // of them is on screen.
-  //
-  // Leaving discards the draft, which is what the cancel button does too.
-  // There is no half-saved event to keep: an event with no name cannot be
-  // written, and saving one silently on the way past would leave the day
-  // holding something nobody meant to create.
-  useEffect(() => {
-    if (!editingEvent) return;
-    function onPointerDown(e) {
-      // The delete confirmation and the "Deli sliko" preview are each a sheet
-      // of their own, sitting outside the form in the DOM. Acting in one must
-      // not also count as leaving the form.
-      if (deletingEvent || shareImage) return;
-      if (e.target && e.target.closest && e.target.closest("[data-event-form]")) return;
-      cancelEditingEvent();
-    }
-    window.addEventListener("pointerdown", onPointerDown);
-    return () => window.removeEventListener("pointerdown", onPointerDown);
-  }, [editingEvent, deletingEvent, shareImage]);
-
   useEffect(() => {
     if (!menuOpen) return;
     function onPointerDown(e) {
@@ -4099,10 +4110,11 @@ export default function App() {
     const existing = id != null ? dayEvents[iso]?.find((e) => e.id === id) : null;
     setEventTitleDraft(existing?.title || "");
     setEventDescDraft(existing?.description || "");
-    setShowEventDescInput(!!existing?.description);
-    setEventKeywordDraft(existing?.keyword || "");
+    // Folded on every opening. Quick editing shows no description at all
+    // (it lives under Napredno urejanje), and a new event starts with none.
+    setShowEventDescInput(false);
+    setEventPlaceDraft(existing?.place || "");
     setEventLinkDraft(existing?.link || "");
-    setShowEventLinkInput(!!existing?.link);
     setEventImageDraft(existing?.image || "");
     setEventChecklistDraft(!!existing?.checklist);
     setEventDateDraft(iso);
@@ -4112,10 +4124,10 @@ export default function App() {
     setEventMoveNoteDraft(existing?.moveNote || "");
     setEventMoveSilentDraft(!!existing?.moveSkipNotify);
     setEventMoveHideBannerDraft(!!existing?.moveHideBanner);
-    // Always shut, whatever the event already carries. The form should open
-    // the same way every time -- a drawer that is sometimes down and
-    // sometimes not means reading it before you can use it.
-    setShowEventMore(false);
+    // Always quick, whatever the event already carries. The form should open
+    // the same way every time -- one that sometimes opens long and sometimes
+    // short means reading it before you can use it.
+    setEventFormMode("quick");
     setCopiedEventId(null);
     const { start, end } = splitDuration(existing?.duration || "");
     setEventStartDraft(start);
@@ -4128,9 +4140,8 @@ export default function App() {
     setEventTitleDraft("");
     setEventDescDraft("");
     setShowEventDescInput(false);
-    setEventKeywordDraft("");
+    setEventPlaceDraft("");
     setEventLinkDraft("");
-    setShowEventLinkInput(false);
     setEventImageDraft("");
     setEventChecklistDraft(false);
     setEventDateDraft("");
@@ -4138,7 +4149,7 @@ export default function App() {
     setEventMoveNoteDraft("");
     setEventMoveSilentDraft(false);
     setEventMoveHideBannerDraft(false);
-    setShowEventMore(false);
+    setEventFormMode("quick");
     setCopiedEventId(null);
     closeShareImage();
     setEventStartDraft("");
@@ -4416,7 +4427,10 @@ export default function App() {
       id: eventId,
       title,
       description: eventDescDraft.trim(),
-      keyword: eventKeywordDraft.trim(),
+      place: eventPlaceDraft.trim(),
+      // No longer entered or shown anywhere, but carried across on an edit so
+      // an older event's keyword is not wiped by someone fixing its time.
+      keyword: existing?.keyword || "",
       // Normalised on the way in, so every reader downstream gets either a
       // usable http(s) address or nothing at all.
       link: safeEventLink(eventLinkDraft),
@@ -5133,7 +5147,7 @@ export default function App() {
   if (name && !needsSurname) {
     if (installHintSeen === null) return appLoader;
     if (installHintSeen === false) return installScreen;
-    // Without this the calendar paints itself empty -- fourteen days of
+    // Without this the calendar paints itself empty -- a week of
     // "Še nihče ni vnesel" -- and then fills in, which reads as an app that
     // lost the data and found it again.
     if (!firstLoadDone) return appLoader;
@@ -5269,15 +5283,22 @@ export default function App() {
   // put last month's outings in "Aktualni dogodki" the moment anyone opened
   // the archive.
   //
-  // The base two weeks only, not everything `days` has grown to: paging the
-  // desktop month view forward would otherwise fill the strip with events
-  // from whichever month you happened to look at last. The looked-ahead day
-  // joins them: it is only set when the two weeks hold nothing further on.
+  // The base thirty days only, not everything `days` has grown to: paging
+  // the desktop month view forward would otherwise fill the strip with events
+  // from whichever month you happened to look at last.
   const upcomingEvents = {};
-  for (const iso of aheadIso ? [...baseDays, aheadIso] : baseDays) {
+  for (const iso of baseDays) {
     if (dayEvents[iso]) upcomingEvents[iso] = dayEvents[iso];
   }
-  const recentEvents = eventsNearestFirst(upcomingEvents);
+  // The strip: every event in the next thirty days, soonest leftmost.
+  const stripEvents = eventsNearestFirst(upcomingEvents);
+  // The same plus the looked-ahead day, for "Naslednji dogodek" -- set only
+  // when the thirty days hold nothing further on. Kept off the strip, which
+  // promises the next thirty days and nothing past them.
+  const recentEvents =
+    aheadIso && dayEvents[aheadIso]
+      ? eventsNearestFirst({ ...upcomingEvents, [aheadIso]: dayEvents[aheadIso] })
+      : stripEvents;
 
   // Everything the archive has loaded, gathered into the months it belongs
   // to, newest month first. archiveIsos is already sorted newest-first, so
@@ -5366,8 +5387,13 @@ export default function App() {
   // Only the drift stops. A drag is something a person asked for, and it
   // still works: with more than three events the rest are still reachable.
   const recentEventsRow = (
+    // Keyed on the count across: the strip's position is measured in card
+    // widths, and a window resized across the breakpoint would otherwise
+    // carry an offset counted in the other layout's cards.
     <RecentEventsCarousel
-      events={recentEvents}
+      key={isDesktop ? "desktop" : "phone"}
+      perView={isDesktop ? CARDS_IN_VIEW : CARDS_IN_VIEW_PHONE}
+      events={stripEvents}
       eventHues={eventHues}
       onSelectDay={openEventDay}
       today={today}
@@ -6432,100 +6458,218 @@ export default function App() {
           key={id || "new"}
         >
           <div style={styles.eventEyebrow}>Dogodek</div>
-          <input
-            // Only a new event opens with the cursor in here: you came to
-            // type a name. Editing an existing one opens the card to read
-            // and adjust, so autofocus there just throws the phone keyboard
-            // up over it. `id == null` is "new"; a legacy "" id is an edit.
-            autoFocus={!reminder && id == null}
-            style={styles.input}
-            placeholder="Ime dogodka"
-            value={eventTitleDraft}
-            onChange={(e) => setEventTitleDraft(e.target.value)}
-          />
-          <div style={styles.eventTimeRow}>
-            <input
-              type="time"
-              style={styles.inputSmall}
-              aria-label="Začetek dogodka"
-              value={eventStartDraft}
-              onChange={(e) => setEventStartDraft(e.target.value)}
-            />
-            <span style={styles.eventTimeSep}>–</span>
-            <input
-              type="time"
-              style={styles.inputSmall}
-              aria-label="Konec dogodka"
-              value={eventEndDraft}
-              onChange={(e) => setEventEndDraft(e.target.value)}
-            />
-          </div>
-          {showEventDescInput ? (
-            <div style={styles.noteBlock}>
-              <textarea
-                style={styles.noteTextarea}
-                rows={2}
-                placeholder="Opis dogodka"
-                value={eventDescDraft}
-                onChange={(e) => setEventDescDraft(e.target.value)}
-              />
+          {/* Two ways in, chosen here rather than in a menu before the form:
+              a menu would be one more tap on every event, and quick -- the
+              one nearly every event wants -- is already selected. Switching
+              keeps whatever has been typed; both modes edit the same drafts. */}
+          <div style={styles.eventModeTabs} role="tablist">
+            {[
+              ["quick", existing ? "Hitro urejanje" : "Hitri vnos"],
+              ["advanced", existing ? "Napredno urejanje" : "Napredni vnos"],
+            ].map(([mode, label]) => (
               <button
-                style={styles.noteRemoveButton}
-                onClick={() => {
-                  setEventDescDraft("");
-                  setShowEventDescInput(false);
-                }}
+                key={mode}
+                role="tab"
+                aria-selected={eventFormMode === mode}
+                style={styles.eventModeTab(eventFormMode === mode)}
+                onClick={() => setEventFormMode(mode)}
               >
-                Odstrani opis
+                {label}
               </button>
+            ))}
+          </div>
+
+          {/* One column, one gap and one field height throughout, so the form
+              reads as a list of rows rather than a pile of controls. Each
+              field is labelled above it: a time input has no placeholder to
+              explain it, and the rest are labelled to match. */}
+          <div style={styles.eventFields}>
+            <label style={styles.eventFieldLabel}>
+              Ime
+              <input
+                // Only a new event opens with the cursor in here: you came to
+                // type a name. Editing an existing one opens the card to read
+                // and adjust, so autofocus there just throws the phone keyboard
+                // up over it. `id == null` is "new"; a legacy "" id is an edit.
+                autoFocus={!reminder && id == null}
+                style={styles.eventField}
+                placeholder="Ime dogodka"
+                value={eventTitleDraft}
+                onChange={(e) => setEventTitleDraft(e.target.value)}
+              />
+            </label>
+            <div style={styles.eventFieldLabel}>
+              Ura
+              <div style={styles.eventTimeRow}>
+                <input
+                  type="time"
+                  style={styles.eventTimeField}
+                  aria-label="Začetek dogodka"
+                  value={eventStartDraft}
+                  onChange={(e) => setEventStartDraft(e.target.value)}
+                />
+                <span style={styles.eventTimeSep}>–</span>
+                <input
+                  type="time"
+                  style={styles.eventTimeField}
+                  aria-label="Konec dogodka"
+                  value={eventEndDraft}
+                  onChange={(e) => setEventEndDraft(e.target.value)}
+                />
+              </div>
             </div>
-          ) : (
-            <button
-              style={styles.addNoteButton}
-              onClick={() => setShowEventDescInput(true)}
-            >
-              <MessageSquare size={12} /> Dodaj opis
-            </button>
-          )}
-          {/* Name, time and description are what almost every event is;
-              the rest is occasional, and four more controls stacked under
-              them made the common case look like a long form. */}
-          <button
-            style={styles.addNoteButton}
-            onClick={() => setShowEventMore((open) => !open)}
-            aria-expanded={showEventMore}
-          >
-            <Settings size={12} /> Več možnosti
-            <ChevronRight
-              size={13}
-              style={{
-                marginLeft: 2,
-                transform: showEventMore ? "rotate(90deg)" : "none",
-                transition: "transform 150ms ease",
-              }}
-            />
-          </button>
-          {showEventMore && (
-            <div style={styles.eventMorePanel}>
+            <label style={styles.eventFieldLabel}>
+              Kraj
+              <input
+                style={styles.eventField}
+                placeholder="Kraj"
+                aria-label="Kraj dogodka"
+                value={eventPlaceDraft}
+                onChange={(e) => setEventPlaceDraft(e.target.value)}
+              />
+            </label>
+            {/* Always open in advanced, which is for filling everything in.
+                In quick mode only a new event offers it, behind a quiet
+                link, because most events have none. Quick editing has no
+                description at all: it is for fixing the name, time or place,
+                and the description is one tap away under Napredno urejanje. */}
+            {eventFormMode === "quick" && existing ? null : eventFormMode === "advanced" ||
+              showEventDescInput ? (
+              <div style={styles.eventFieldLabel}>
+                Opis
+                <textarea
+                  style={styles.eventTextarea}
+                  rows={3}
+                  placeholder="Opis dogodka"
+                  aria-label="Opis dogodka"
+                  value={eventDescDraft}
+                  onChange={(e) => setEventDescDraft(e.target.value)}
+                />
+                {eventFormMode === "quick" && (
+                  <button
+                    style={styles.noteRemoveButton}
+                    onClick={() => {
+                      setEventDescDraft("");
+                      setShowEventDescInput(false);
+                    }}
+                  >
+                    Odstrani opis
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                style={styles.eventAddRow}
+                onClick={() => setShowEventDescInput(true)}
+              >
+                <MessageSquare size={14} /> Dodaj opis
+              </button>
+            )}
+          </div>
+
+          {eventFormMode === "advanced" && (
+            <div style={styles.eventFields}>
+              <div style={styles.eventSectionLabel}>Dodatno</div>
+              <label style={styles.eventFieldLabel}>
+                Povezava
+                <input
+                  style={styles.eventField}
+                  type="url"
+                  inputMode="url"
+                  placeholder="Povezava (https://…)"
+                  value={eventLinkDraft}
+                  onChange={(e) => setEventLinkDraft(e.target.value)}
+                />
+              </label>
               {/* Named for what appears on the card rather than for the
                   field behind it: the person ticking this is deciding
                   whether this evening needs a list of things to bring. */}
-              <label style={styles.eventCheckRow}>
+              <div style={styles.eventCheckGroup}>
+                <label style={styles.eventCheckRowTall}>
+                  <input
+                    type="checkbox"
+                    className="appCheck"
+                    checked={eventChecklistDraft}
+                    onChange={(e) => setEventChecklistDraft(e.target.checked)}
+                  />
+                  Kva rabmo
+                  {/* Inside the label so it sits on the row's right edge, which
+                      is why the click is stopped: left to bubble, a press
+                      on the (i) would also tick the box. */}
+                  <button
+                    type="button"
+                    style={styles.eventInfoButton(showChecklistInfo)}
+                    aria-label="Kaj je Kva rabmo?"
+                    aria-expanded={showChecklistInfo}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowChecklistInfo((open) => !open);
+                    }}
+                  >
+                    <Info size={17} />
+                  </button>
+                </label>
+                {showChecklistInfo && (
+                  <p style={styles.eventInfoText}>
+                    Pod dogodkom se pokaže seznam »Kva rabmo«. Vsak lahko nanj
+                    doda stvar, ki jo je treba prinesti, in označi, da jo
+                    prinese sam – tako se vidi, kaj je že pokrito in kaj še
+                    manjka.
+                  </p>
+                )}
+              </div>
+              <div style={styles.eventOption(Boolean(eventImageDraft))}>
+                {/* A button rather than a label, so the picker only opens
+                    from the press and nothing else can trip it. */}
+                <button
+                  style={styles.eventOptionToggleTall(Boolean(eventImageDraft))}
+                  disabled={eventImageUploading}
+                  onClick={() =>
+                    document.getElementById(eventImageInputId)?.click()
+                  }
+                >
+                  <Plus size={13} />{" "}
+                  {eventImageUploading
+                    ? "Nalagam …"
+                    : eventImageDraft
+                      ? "Zamenjaj sliko"
+                      : "Dodaj sliko"}
+                </button>
+                {eventImageDraft && (
+                  <div style={styles.eventOptionBody}>
+                    <div style={styles.eventImageRow}>
+                      <img
+                        src={eventImageUrl(eventImageDraft)}
+                        alt=""
+                        style={styles.eventImagePreview}
+                      />
+                      <button
+                        style={styles.noteRemoveButton}
+                        onClick={() => setEventImageDraft("")}
+                      >
+                        Odstrani sliko
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <input
-                  type="checkbox"
-                  className="appCheck"
-                  checked={eventChecklistDraft}
-                  onChange={(e) => setEventChecklistDraft(e.target.checked)}
+                  id={eventImageInputId}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    uploadEventImage(iso, e.target.files);
+                    // Cleared so picking the same file twice in a row
+                    // still fires a change event the second time.
+                    e.target.value = "";
+                  }}
                 />
-                Kva rabmo
-              </label>
-              {/* Only for an event that exists. Choosing a day for one that
-                  does not yet would just be creating it somewhere else,
-                  which is what standing on that day and pressing add is. */}
+              </div>
               {existing && (
                 <div style={styles.eventOption(showEventDateInput)}>
                   <button
-                    style={styles.eventOptionToggle(showEventDateInput)}
+                    style={styles.eventOptionToggleTall(showEventDateInput)}
                     onClick={() => setShowEventDateInput((open) => !open)}
                     aria-expanded={showEventDateInput}
                   >
@@ -6539,7 +6683,7 @@ export default function App() {
                     <div style={styles.eventOptionBody}>
                       <input
                         type="date"
-                        style={styles.input}
+                        style={styles.eventField}
                         aria-label="Nov datum dogodka"
                         value={eventDateDraft}
                         onChange={(e) => setEventDateDraft(e.target.value)}
@@ -6549,14 +6693,14 @@ export default function App() {
                         dan. Neobvezno.
                       </p>
                       <textarea
-                        style={styles.noteTextarea}
+                        style={styles.eventTextarea}
                         rows={2}
                         placeholder="Npr. Zaradi dežja prestavljeno na soboto 12. 8."
                         aria-label="Obvestilo o prestavitvi"
                         value={eventMoveNoteDraft}
                         onChange={(e) => setEventMoveNoteDraft(e.target.value)}
                       />
-                      <label style={styles.eventCheckRow}>
+                      <label style={styles.eventCheckRowTall}>
                         <input
                           type="checkbox"
                           className="appCheck"
@@ -6567,7 +6711,7 @@ export default function App() {
                         />
                         Ni potrebno obvestiti
                       </label>
-                      <label style={styles.eventCheckRow}>
+                      <label style={styles.eventCheckRowTall}>
                         <input
                           type="checkbox"
                           className="appCheck"
@@ -6615,97 +6759,10 @@ export default function App() {
                   )}
                 </div>
               )}
-              <div style={styles.eventOption(showEventLinkInput)}>
-                <button
-                  style={styles.eventOptionToggle(showEventLinkInput)}
-                  onClick={() => setShowEventLinkInput((open) => !open)}
-                  aria-expanded={showEventLinkInput}
-                >
-                  <Link size={13} /> Dodaj povezavo
-                  <ChevronRight
-                    size={13}
-                    style={styles.eventOptionCaret(showEventLinkInput)}
-                  />
-                </button>
-                {showEventLinkInput && (
-                  <div style={styles.eventOptionBody}>
-                    <input
-                      style={styles.input}
-                      type="url"
-                      inputMode="url"
-                      placeholder="Povezava (https://…)"
-                      value={eventLinkDraft}
-                      onChange={(e) => setEventLinkDraft(e.target.value)}
-                    />
-                    <button
-                      style={styles.noteRemoveButton}
-                      onClick={() => {
-                        setEventLinkDraft("");
-                        setShowEventLinkInput(false);
-                      }}
-                    >
-                      Odstrani povezavo
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div style={styles.eventOption(Boolean(eventImageDraft))}>
-                {/* A button rather than a label, so the picker only opens
-                    from the press and nothing else can trip it. */}
-                <button
-                  style={styles.eventOptionToggle(Boolean(eventImageDraft))}
-                  disabled={eventImageUploading}
-                  onClick={() =>
-                    document.getElementById(eventImageInputId)?.click()
-                  }
-                >
-                  <Plus size={13} />{" "}
-                  {eventImageUploading
-                    ? "Nalagam …"
-                    : eventImageDraft
-                      ? "Zamenjaj sliko"
-                      : "Dodaj sliko"}
-                </button>
-                {eventImageDraft && (
-                  <div style={styles.eventOptionBody}>
-                    <div style={styles.eventImageRow}>
-                      <img
-                        src={eventImageUrl(eventImageDraft)}
-                        alt=""
-                        style={styles.eventImagePreview}
-                      />
-                      <button
-                        style={styles.noteRemoveButton}
-                        onClick={() => setEventImageDraft("")}
-                      >
-                        Odstrani sliko
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <input
-                  id={eventImageInputId}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: "none" }}
-                  onChange={(e) => {
-                    uploadEventImage(iso, e.target.files);
-                    // Cleared so picking the same file twice in a row
-                    // still fires a change event the second time.
-                    e.target.value = "";
-                  }}
-                />
-              </div>
-              <input
-                style={styles.input}
-                placeholder="Ključna beseda"
-                value={eventKeywordDraft}
-                onChange={(e) => setEventKeywordDraft(e.target.value)}
-              />
               {existing && (
                 <div style={styles.shareRow}>
                   <button
-                    style={styles.eventShareButton}
+                    style={styles.eventShareButtonTall}
                     onClick={() => copyEventLink(iso, id)}
                   >
                     {copiedEventId === id ? (
@@ -6719,7 +6776,7 @@ export default function App() {
                     )}
                   </button>
                   <button
-                    style={styles.eventShareButton}
+                    style={styles.eventShareButtonTall}
                     onClick={() => openShareImage(iso, id)}
                   >
                     <ImageDown size={13} /> Deli sliko
@@ -6728,31 +6785,41 @@ export default function App() {
               )}
             </div>
           )}
-          <div style={styles.editActionsRow}>
-            <button style={styles.cancelButton} onClick={cancelEditingEvent}>
-              Prekliči
+
+          {/* Their own pair rather than the app's shared save/cancel: the
+              shared save is a grey slab that only turns green once saved,
+              and at the foot of this form it read as switched off. Here the
+              way forward is the green one and wider, cancel a quiet outline
+              beside it, both at the field height. Green goes forward, red
+              backs out -- the colours say which is which before the words do. */}
+          <div style={styles.eventFormActions}>
+            <button style={styles.eventFormCancel} onClick={cancelEditingEvent}>
+              <X size={15} /> Prekliči
             </button>
             <button
-              style={{
-                ...styles.saveButton(false),
-                opacity: eventTitleDraft.trim() ? 1 : 0.5,
-              }}
+              style={styles.eventFormSave(Boolean(eventTitleDraft.trim()))}
               disabled={!eventTitleDraft.trim()}
               onClick={() => saveEvent(iso, id)}
             >
               {/* The same form does both jobs, and "Dodaj" on an event that
                   already exists reads as though pressing it would leave a
                   second copy behind. */}
+              {existing ? <Check size={16} /> : <Plus size={16} />}
               {existing ? "Shrani" : "Dodaj"}
             </button>
           </div>
+          {/* Apart from the pair above, under a rule and across the whole
+              width, so it cannot be hit on the way to Prekliči. It still only
+              asks -- the confirmation sheet is what deletes. */}
           {existing && (existing.createdBy === name || isAdmin) && (
-            <button
-              style={styles.deleteButton}
-              onClick={() => setDeletingEvent({ iso, event: existing })}
-            >
-              <Trash2 size={12} /> Izbriši dogodek
-            </button>
+            <div style={styles.eventFormDeleteRow}>
+              <button
+                style={styles.eventFormDelete}
+                onClick={() => setDeletingEvent({ iso, event: existing })}
+              >
+                <Trash2 size={15} /> Izbriši dogodek
+              </button>
+            </div>
           )}
         </div>
       );
@@ -6826,6 +6893,12 @@ export default function App() {
                   </div>
                 )}
               </div>
+              {event.place && (
+                <p style={styles.eventPlace}>
+                  <MapPin size={13} style={styles.eventPlaceIcon} />
+                  {event.place}
+                </p>
+              )}
               {event.description && (
                 <p style={styles.eventDescription}>{event.description}</p>
               )}
@@ -7034,6 +7107,12 @@ export default function App() {
               </span>
             </div>
 
+            {event.place && (
+              <p style={styles.eventPlace}>
+                <MapPin size={13} style={styles.eventPlaceIcon} />
+                {event.place}
+              </p>
+            )}
             {event.description && (
               <p style={styles.eventDescription}>{event.description}</p>
             )}
@@ -7432,7 +7511,7 @@ export default function App() {
   // turned back past this one.
   //
   // Availability dots only appear on days that are loaded -- on the phone the
-  // two weeks plus anything picked. Event marks come from monthEventDays as
+  // thirty days plus anything picked. Event marks come from monthEventDays as
   // well, so those show across the whole month either way.
   // On desktop the day panel follows the month: today when turning back to
   // this month, the 1st otherwise. Left on a day of the month just paged
@@ -7845,8 +7924,9 @@ export default function App() {
               {dayLabel(d, today)}
             </div>
             {/* A day picked from the full calendar can be months out,
-                where "12 sob" alone no longer says which Saturday. */}
-            {!baseDays.includes(d) && (
+                where "12 sob" alone no longer says which Saturday -- so any
+                day outside this month carries its month. */}
+            {monthOf(d) !== monthOf(today) && (
               <div style={styles.dayName}>{monthShort(d)}</div>
             )}
           </div>

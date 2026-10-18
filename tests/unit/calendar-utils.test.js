@@ -502,3 +502,11 @@ test("isQuietWeekday: Monday to Thursday only, Friday is weekend", () => {
   assert.equal(m.isQuietWeekday("2026-10-24"), false); // sobota
   assert.equal(m.isQuietWeekday("2026-10-25"), false); // nedelja
 });
+
+test("decodeEvent: place, and none on events saved before it existed", () => {
+  assert.equal(
+    m.decodeEvent(JSON.stringify({ title: "Pivo", place: "Pri Jerneju" }), "1").place,
+    "Pri Jerneju"
+  );
+  assert.equal(m.decodeEvent(JSON.stringify({ title: "Pivo" }), "1").place, "");
+});
