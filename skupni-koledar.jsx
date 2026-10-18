@@ -306,43 +306,6 @@ const THEME_CSS = `
     }
   }
 
-  /* A fedora, worn by whoever is admin. Same 42x42 box as the sparkles, so
-     the brim can sit over the top of the 26px circle the way a hat would
-     rather than float above it. */
-  .bossChip {
-    position: relative;
-    overflow: visible;
-  }
-  .bossChip::before {
-    content: "";
-    position: absolute;
-    inset: -8px;
-    background-repeat: no-repeat;
-    background-size: 100% 100%;
-    /* A men's straw hat -- Panama shape, so the crown keeps its crease and
-       the brim stays structured rather than floppy.
-
-       Drawn flat, as a straight side elevation. The first attempt gave the
-       brim an ellipse, which is a view from below, while the crown stayed
-       face-on: two viewpoints in one object, and the brim ended up sweeping
-       across the face instead of sitting on top of it. A flat brim has no
-       perspective left to contradict, and matches the flat circles and stars
-       it sits among.
-
-       Straw is pale, the opposite problem the charcoal fedora had: it holds
-       up on the dark theme and washes out on the light one, so the rim is a
-       darker tan rather than a pale grey. The band sits above the brim's top
-       edge on purpose -- any lower and the brim hides it, which is what
-       happened to the fedora's.
-
-       The tilt is baked into the path rather than applied as a CSS rotation,
-       which would swing the hat around the chip's centre instead of turning
-       it where it sits. */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 42 42'%3E%3Cg transform='translate(2 0) rotate(9 21 10.3)' stroke='%23a8813c' stroke-width='0.7' stroke-linejoin='round'%3E%3Cpath d='M14.2 9.2L14.95 3.6Q15.7 1.9 17.6 2.3Q21 3.1 24.4 2.3Q26.3 1.9 27.05 3.6L27.8 9.2Z' fill='%23e0c07a'/%3E%3Cpath d='M14.25 6.4L27.75 6.4L27.8 9.1L14.2 9.1Z' fill='%233b342e' stroke='none'/%3E%3Crect x='8.6' y='9' width='24.8' height='2.7' rx='1.35' fill='%23e0c07a'/%3E%3C/g%3E%3C/svg%3E");
-    /* Still. A hat that moved would read as being knocked about rather than
-       worn, and the sparkles opposite it are the thing that moves. */
-    pointer-events: none;
-  }
   /* Tonight's card on the event strip, breathing. Small enough to be caught
      at the edge of the eye rather than to pull it: the strip is something
      you glance at on the way past, and a card that insisted would be worse
@@ -443,6 +406,14 @@ export function monthNumber(iso) {
 }
 
 const WEEKDAY_NAMES = ["ned", "pon", "tor", "sre", "čet", "pet", "sob"];
+
+// Monday to Thursday: the evenings the club mostly stays in. Their rows in
+// the week list are drawn shorter, so the weekend -- where the plans are --
+// gets the room. Friday counts as weekend here, on purpose.
+export function isQuietWeekday(iso) {
+  const day = utcFromIso(iso).getUTCDay();
+  return day >= 1 && day <= 4;
+}
 
 export function weekdayAbbrev(iso) {
   return WEEKDAY_NAMES[utcFromIso(iso).getUTCDay()];
@@ -1467,18 +1438,11 @@ export function hasSparkles(name) {
   return SPARKLE_NAMES.has((name || "").trim().toLowerCase());
 }
 
-// The hat goes on whoever is admin, not on a name -- admin is the one who can
-// edit anybody's entry, and nothing on screen said so until now. Tying it to
-// the role rather than to Žiga means it follows if the role ever moves.
-export function isBoss(name) {
-  return (name || "").trim().toLowerCase() === ADMIN_NAME;
-}
-
 // One decoration at a time, resolved in one place so the render sites do not
-// each grow a ladder of conditions.
+// each grow a ladder of conditions. The admin's straw hat used to be the
+// second; it was taken off on request, so the admin's chip is a plain one.
 export function chipDecoration(name) {
   if (hasSparkles(name)) return "sparkleChip";
-  if (isBoss(name)) return "bossChip";
   return undefined;
 }
 
@@ -1633,7 +1597,7 @@ const PHOTOS_IN_VIEW = 3;
 // one tap away inside the day.
 const DAY_CHIPS_SHOWN = 2;
 
-// How far back one press of "Naloži starejše" reaches: one calendar month,
+// How far back one press of "Prikaži starejše" reaches: one calendar month,
 // not a rolling count of days. A bounded slab rather than the whole history,
 // because the archive only grows and a query with no lower bound would
 // eventually read every row the club has ever written -- and aligned to the
@@ -1644,6 +1608,21 @@ function archiveSlabLower(upper) {
   return upper.endsWith("-01")
     ? prevMonthStart(monthOf(upper))
     : `${monthOf(upper)}-01`;
+}
+
+// How many months the archive shows as soon as it opens, this one included.
+// One month on arrival read as an archive that was nearly empty; half a year
+// is what people scroll back through anyway, and "Prikaži starejše" still
+// reaches past it a month at a time.
+const ARCHIVE_INITIAL_MONTHS = 6;
+
+// Where that first read starts: the 1st of the month ARCHIVE_INITIAL_MONTHS - 1
+// before today's, so "2026-10-18" -> "2026-05-01" (Oct, Sep, Aug, Jul, Jun,
+// May). Whole months, for the same reason archiveSlabLower keeps to them.
+export function archiveInitialLower(today) {
+  let start = `${monthOf(today)}-01`;
+  for (let i = 1; i < ARCHIVE_INITIAL_MONTHS; i++) start = prevMonthStart(monthOf(start));
+  return start;
 }
 
 // Days the home list shows before it stops. A week: far enough to answer
@@ -1661,11 +1640,17 @@ const CHANGELOG = [
   {
     date: "2026-10-18",
     items: [
-      "Na telefonu: pod razširjenim seznamom gumb Pokaži celoten koledar",
-      "V celotnem koledarju izbereš katerikoli dan naprej in mu dodaš dogodek",
+      "Na telefonu je pod seznamom dni koledar za cel mesec",
+      "V njem izbereš katerikoli dan naprej in mu dodaš dogodek",
+      "Seznam kaže vedno sedem dni, izbran dan pa se pokaže pod črto",
+      "Pregled tedna: dnevi od ponedeljka do četrtka so nižji, vikend ostane velik",
+      "Petek, sobota in nedelja imajo diskretno značko Vikend",
       "Na računalniku je koledar za cel mesec, s puščicama listaš po mesecih",
       "Naslednji dogodek se pokaže zgoraj, tudi če je več kot dva tedna naprej",
       "Ime in priimek se vzameta iz tvojega računa, vpisovati ju ni več treba",
+      "Arhiv se odpre kar na domači strani, pod gumbom na dnu",
+      "Arhiv ob vsakem odprtju pokaže zadnjih 6 mesecev, starejše odpre gumb",
+      "Sliko iz arhiva lahko admin nastavi za sliko meseca, kar v pregledovalniku",
     ],
   },
   {
@@ -1816,6 +1801,9 @@ function PhotoLightbox({
   canSetCover,
   isCover,
   onSetCover,
+  canSetMonthCover,
+  isMonthCover,
+  onSetMonthCover,
 }) {
   const [dragPx, setDragPx] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -1965,6 +1953,24 @@ function PhotoLightbox({
             >
               {isCover ? <Check size={12} /> : <Star size={12} />}
               {isCover ? "Naslovna slika" : "Nastavi za naslovno sliko"}
+            </button>
+          )}
+          {/* The month's picture, picked the same way. Until now it could only
+              be uploaded from a file, which meant downloading a photo that was
+              already in the archive just to put it back up again. */}
+          {canSetMonthCover && (
+            <button
+              style={
+                isMonthCover
+                  ? { ...styles.lightboxAction, opacity: 0.55, cursor: "default" }
+                  : styles.lightboxAction
+              }
+              onClick={isMonthCover ? undefined : onSetMonthCover}
+              disabled={isMonthCover}
+              aria-label="Nastavi za naslovno sliko meseca"
+            >
+              {isMonthCover ? <Check size={12} /> : <CalendarDays size={12} />}
+              {isMonthCover ? "Slika meseca" : "Nastavi za sliko meseca"}
             </button>
           )}
           {canDelete && (
@@ -2692,16 +2698,16 @@ export default function App() {
   // below is this plus whatever the month view or a picked day has asked
   // for on top, and is what everything else reads.
   const [baseDays, setBaseDays] = useState([]);
-  // Days past the window that someone picked from the full calendar on the
-  // phone. Kept as single days rather than stretching the window to reach
-  // them: picking a Saturday two months out should add that Saturday to the
-  // list, not sixty empty rows above it.
-  const [extraDays, setExtraDays] = useState([]);
-  // The month the full calendar shows -- the desktop grid always, the phone's
-  // only once opened. Shared, so a window resized across the breakpoint keeps
-  // the month you were on.
+  // The day picked from the phone's calendar (or reached from the event
+  // strip or a notification) when it is not one of the seven the list always
+  // shows. It gets a card of its own under a divider, rather than the list
+  // stretching to reach it: picking the 30th should show the 30th, not every
+  // day up to it. One at a time -- a new pick replaces the last.
+  const [pickedDay, setPickedDay] = useState(null);
+  // The month the full calendar shows -- the desktop grid and the phone's,
+  // under the day list. Shared, so a window resized across the breakpoint
+  // keeps the month you were on.
   const [calMonth, setCalMonth] = useState(() => monthOf(todayIso()));
-  const [showFullCal, setShowFullCal] = useState(false);
   // Which days of the shown month hold an event: "2026-12" -> [iso]. Read on
   // its own because on the phone most of that month is not in `days`, and
   // without it the full calendar could only mark events in the two weeks the
@@ -2715,7 +2721,6 @@ export default function App() {
   const [dayData, setDayData] = useState({}); // { iso: { name: { hours, note } } }
   const [openDay, setOpenDay] = useState(null);
   const [scrollToDay, setScrollToDay] = useState(null);
-  const [showAllDays, setShowAllDays] = useState(false);
   // Whether the visible window has been read once. Not `refreshing`, which
   // also goes true on every later reload -- this is only about the first.
   const [firstLoadDone, setFirstLoadDone] = useState(false);
@@ -2758,8 +2763,11 @@ export default function App() {
   const [reminderRotate, setReminderRotate] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  // "calendar" | "archive". Two pages, so a string rather than a router.
-  const [view, setView] = useState("calendar");
+  // Whether the archive is unfolded under its button at the foot of the
+  // page. It used to be a page of its own ("view"), with a back button and a
+  // history entry; folded into the home page it is one tap to open and one
+  // to close, on the phone and the desktop alike.
+  const [showArchive, setShowArchive] = useState(false);
   // Oldest date the archive has reached, always the first of a month once
   // anything is loaded. The next slab is the month before it; null means
   // nothing loaded yet.
@@ -2907,12 +2915,12 @@ export default function App() {
       const last = lastDayOfMonth(calMonth);
       for (let iso = start; iso <= last; iso = addDays(iso, 1)) all.add(iso);
     }
-    for (const iso of extraDays) if (iso >= start) all.add(iso);
+    if (pickedDay && pickedDay >= start) all.add(pickedDay);
     // Loaded like any other day, so the card on top can be answered from
     // there -- attendance, comments and realtime all need the day in `days`.
     if (aheadIso && aheadIso >= start) all.add(aheadIso);
     return [...all].sort();
-  }, [baseDays, extraDays, calMonth, isDesktop, aheadIso]);
+  }, [baseDays, pickedDay, calMonth, isDesktop, aheadIso]);
 
   // Booleans rather than dayEvents itself in the effect's deps, so it asks
   // the server only when the answer can have changed: an event appearing in
@@ -2967,7 +2975,7 @@ export default function App() {
   // never get its mark. One range query per month turned to, keys only
   // looked at -- cheap next to what loadAllData already pulls.
   useEffect(() => {
-    if (!name || !(isDesktop || showFullCal)) return;
+    if (!name) return;
     const month = calMonth;
     let cancelled = false;
     (async () => {
@@ -2994,7 +3002,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [name, calMonth, showFullCal, isDesktop]);
+  }, [name, calMonth]);
 
   useEffect(() => {
     const styleEl = document.createElement("style");
@@ -3061,18 +3069,6 @@ export default function App() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [menuOpen]);
-
-  // The archive is a page, so the phone's back button has to leave the
-  // archive rather than leave the app. Every switch pushes an entry and
-  // popstate reads the view back out of it -- an entry with no state at all
-  // is the first load, which is the calendar.
-  useEffect(() => {
-    function onPopState(e) {
-      setView(e.state && e.state.view === "archive" ? "archive" : "calendar");
-    }
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
 
   useEffect(() => {
     if (!scrollToDay) return;
@@ -3407,8 +3403,13 @@ export default function App() {
       // or until it has reached past the oldest event there is. A quiet
       // stretch of months would otherwise cost one press each, every one of
       // them adding nothing to the list.
+      //
+      // The first read of an opening takes the whole initial half year in one
+      // query; every press after it steps back a month as before.
+      let first = archiveFrom === null;
       for (;;) {
-        const lower = archiveSlabLower(upper);
+        const lower = first ? archiveInitialLower(days[0]) : archiveSlabLower(upper);
+        first = false;
         const res = await window.storage.range(`avail:${lower}`, `avail:${upper}`, true);
         for (const row of (res && res.rows) || []) {
           const iso = isoFromKey(row.key);
@@ -3469,7 +3470,7 @@ export default function App() {
   // Asked once, before the first slab, so the very first press already
   // knows whether there is anything older to reach for.
   useEffect(() => {
-    if (view !== "archive" || !name || oldestEventIso !== undefined) return;
+    if (!showArchive || !name || oldestEventIso !== undefined) return;
     let cancelled = false;
     (async () => {
       try {
@@ -3483,14 +3484,25 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [view, name, oldestEventIso]);
+  }, [showArchive, name, oldestEventIso]);
 
-  // First slab on first visit only; after that it is the button's job.
+  // Every opening starts over from the last six months, rather than picking
+  // up wherever the previous visit's presses had reached: the archive should
+  // look the same each time it is opened, and re-reading it is also what
+  // brings in photos and comments added since. Reset on closing, so the
+  // effect below sees archiveFrom null again on the way back in.
   useEffect(() => {
-    if (view === "archive" && name && days.length && archiveFrom === null) {
+    if (showArchive) return;
+    setArchiveFrom(null);
+    setArchiveIsos([]);
+  }, [showArchive]);
+
+  // First read on each opening; after that it is the button's job.
+  useEffect(() => {
+    if (showArchive && name && days.length && archiveFrom === null) {
       loadArchiveSlab();
     }
-  }, [view, name, days, archiveFrom, loadArchiveSlab]);
+  }, [showArchive, name, days, archiveFrom, loadArchiveSlab]);
 
   // Read inside the change handler rather than closed over, so neither the
   // window moving nor an event changing means tearing the subscription down
@@ -3722,8 +3734,7 @@ export default function App() {
       name &&
       !needsSurname &&
       installHintSeen === true &&
-      firstLoadDone &&
-      view === "calendar";
+      firstLoadDone;
     if (calendarReady && !hasAutoOpenedRef.current) {
       hasAutoOpenedRef.current = true;
       // Arriving from outside the list at a particular day: a push notification
@@ -3760,7 +3771,7 @@ export default function App() {
       // which pushed the rest of the week below the fold for a day whose
       // answer the person usually already knows.
     }
-  }, [days, name, needsSurname, installHintSeen, firstLoadDone, view]);
+  }, [days, name, needsSurname, installHintSeen, firstLoadDone]);
 
   async function fetchExistingNames() {
     const res = await window.storage.list("avail:", true);
@@ -3824,13 +3835,15 @@ export default function App() {
     if (previous && previous !== full) await migrateEntries(previous, full);
   }
 
-  function goTo(next) {
+  // From the menu: unfold the archive at the foot of the page and take the
+  // reader to it, since the menu is opened from the top. The scroll waits a
+  // frame so the section has been laid out with the archive inside it.
+  function openArchiveFromMenu() {
     setMenuOpen(false);
-    if (next === view) return;
-    window.history.pushState({ view: next }, "");
-    setView(next);
-    // A new page starts at its own top, not at wherever the last one was left.
-    window.scrollTo(0, 0);
+    setShowArchive(true);
+    requestAnimationFrame(() =>
+      document.getElementById("arhiv")?.scrollIntoView({ behavior: "smooth", block: "start" })
+    );
   }
 
   // What ctrl+F5 does on a desktop, for a phone that has no such key.
@@ -3988,16 +4001,11 @@ export default function App() {
   // collapsed card used to be. Handing the iso to state lets the effect below
   // run it once React has laid the expanded day out.
   function openEventDay(iso) {
-    // An event can sit past the seventh day, where its card is not rendered
-    // at all. Scrolling to it would find nothing, so reveal the rest of
-    // the list first -- the effect that scrolls runs after that render.
-    if (!days.slice(0, DAYS_SHOWN).includes(iso)) setShowAllDays(true);
-    // A day outside what is loaded (picked from the full calendar, or a
-    // notification about an event weeks out) joins the list first. The
-    // desktop grid shows one month, so it turns to the day's month instead.
-    if (!days.includes(iso)) {
-      setExtraDays((prev) => (prev.includes(iso) ? prev : [...prev, iso]));
-    }
+    // Past the seventh day there is no card to scroll to, so the day becomes
+    // the picked one and gets its card under the list -- the effect that
+    // scrolls runs after that render. A day among the seven opens in place.
+    // The desktop grid shows one month, so it turns to the day's month.
+    if (!baseDays.slice(0, DAYS_SHOWN).includes(iso)) setPickedDay(iso);
     setCalMonth(monthOf(iso));
     selectDay(iso);
     setScrollToDay(iso);
@@ -4801,6 +4809,22 @@ export default function App() {
     }
   }
 
+  // A photo already in the archive becomes the month's picture by pointing
+  // the month's row at the photo's own Storage path -- nothing is copied or
+  // re-uploaded. Safe to share the file: removing a photo deletes only its
+  // kv_store row, never the object in Storage, so the month keeps its picture.
+  async function setMonthCoverFromPhoto(month, path) {
+    const previous = monthCovers[month] || "";
+    setMonthCovers((prev) => ({ ...prev, [month]: path }));
+    try {
+      await window.storage.set(monthCoverKey(month), encodeMonthCover(path), true);
+    } catch (e) {
+      console.error("month cover save failed:", e);
+      setMonthCovers((prev) => ({ ...prev, [month]: previous }));
+      setError("Slike meseca ni bilo mogoče shraniti. Poskusi znova.");
+    }
+  }
+
   async function uploadPhotos(iso, eventId, fileList) {
     const files = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
     if (!files.length || !name || !window.photos) return;
@@ -5386,21 +5410,8 @@ export default function App() {
             <Pencil size={13} style={styles.menuProfilePencil} />
           </button>
           <div style={styles.menuDivider} />
-          <button
-            style={styles.menuItem(view === "calendar")}
-            disabled={view === "calendar"}
-            onClick={() => goTo("calendar")}
-          >
-            <CalendarDays size={14} /> Koledar
-            {view === "calendar" && <span style={styles.menuItemNote}>tu si</span>}
-          </button>
-          <button
-            style={styles.menuItem(view === "archive")}
-            disabled={view === "archive"}
-            onClick={() => goTo("archive")}
-          >
+          <button style={styles.menuItem(false)} onClick={openArchiveFromMenu}>
             <Archive size={14} /> Arhiv
-            {view === "archive" && <span style={styles.menuItemNote}>tu si</span>}
           </button>
           {/* A link out, not a view: still an anchor, and it still opens in
               its own tab, so nothing about where it goes has changed -- it
@@ -5464,20 +5475,33 @@ export default function App() {
 
   // Below the day list on both layouts. Collapsed by default: it is the
   // least urgent thing on the page and would otherwise push the footer down
-  // every time anything shipped.
-  const whatsNewSection = (
+  // every time anything shipped. A function rather than a const: the archive
+  // unfolds inside it, and archivePage is built further down -- evaluated up
+  // here, this would read archivePage before it exists.
+  const renderWhatsNewSection = () => (
     <div style={styles.whatsNewSection}>
-      {/* The archive is otherwise only in the menu, which is where you look
-          when you already know what you want. This is for the end of the
-          page, where you have run out of what is coming and the next
-          thought is what has been. No aria-expanded and no rotating
-          chevron: the two buttons under it unfold in place, this one
-          leaves. */}
-      <button style={styles.whatsNewToggle} onClick={() => goTo("archive")}>
-        <Archive size={13} />
+      {/* At the end of the page, where you have run out of what is coming
+          and the next thought is what has been. Full width, unlike the
+          buttons under it: it is the one of them that opens onto a whole
+          list, the last six months of evenings, unfolded right here. */}
+      <button
+        id="arhiv"
+        style={styles.archiveToggle}
+        onClick={() => setShowArchive((open) => !open)}
+        aria-expanded={showArchive}
+      >
+        <Archive size={14} />
         Arhiv dogodkov
-        <ChevronRight size={14} style={{ marginLeft: "auto" }} />
+        <ChevronRight
+          size={16}
+          style={{
+            marginLeft: "auto",
+            transform: showArchive ? "rotate(90deg)" : "none",
+            transition: "transform 150ms ease",
+          }}
+        />
       </button>
+      {showArchive && archivePage}
       <button
         style={styles.whatsNewToggle}
         onClick={() => setShowWhatsNew((open) => !open)}
@@ -5691,6 +5715,15 @@ export default function App() {
           lightbox.eventId,
           lightboxPhotos[lightboxIndex].path
         )
+      }
+      // Admin only, like uploading a month's picture: the month belongs to
+      // the club rather than to whoever was out that week.
+      canSetMonthCover={isAdmin}
+      isMonthCover={
+        monthCovers[monthOf(lightbox.iso)] === lightboxPhotos[lightboxIndex].path
+      }
+      onSetMonthCover={() =>
+        setMonthCoverFromPhoto(monthOf(lightbox.iso), lightboxPhotos[lightboxIndex].path)
       }
       downloading={photoDownload}
       onDownload={() =>
@@ -7060,15 +7093,9 @@ export default function App() {
 
   const archivePage = (
     <>
-      <div style={styles.archiveIntro}>
-        <button style={styles.archiveBack} onClick={() => goTo("calendar")}>
-          <ArrowLeft size={14} /> Koledar
-        </button>
-        <div style={styles.archiveHeading}>Arhiv</div>
-        <div style={styles.archiveSubheading}>Kaj je že bilo.</div>
-      </div>
-
-      {archiveError && <div style={styles.errorBanner}>{archiveError}</div>}
+      {archiveError && (
+        <div style={{ ...styles.errorBanner, margin: 0 }}>{archiveError}</div>
+      )}
 
       <div style={styles.archiveList}>
         {archiveEntries.length === 0 && !archiveLoading && (
@@ -7185,9 +7212,9 @@ export default function App() {
             <button
               style={{ ...styles.archiveMore, opacity: archiveLoading ? 0.5 : 1 }}
               disabled={archiveLoading}
-              onClick={loadArchiveSlab}
+              onClick={() => loadArchiveSlab()}
             >
-              {archiveLoading ? "Nalagam …" : "Naloži starejše"}
+              {archiveLoading ? "Nalagam …" : "Prikaži starejše"}
             </button>
             {archiveFrom && (
               <div style={styles.archiveRange}>
@@ -7318,29 +7345,6 @@ export default function App() {
     </div>
   );
 
-  if (view === "archive") {
-    // The same shell the calendar uses, so the navbar sits identically on
-    // both pages and the desktop width limit does not stop at the boundary
-    // between them.
-    const shell = (
-      <>
-        {appHeader}
-        {archivePage}
-      </>
-    );
-    return (
-      <div style={isDesktop ? styles.pageDesktop : styles.page}>
-        {isDesktop ? <div style={styles.desktopContainer}>{shell}</div> : shell}
-        {photoLightbox}
-        {settingsModal}
-        {photoNoticeModal}
-        {deleteEventModal}
-        {shareImageSnapshot}
-        {shareImageModal}
-      </div>
-    );
-  }
-
   // No heading over an empty strip, the same rule tomorrow's reminder
   // follows: on a day nobody photographed, a row saying "Ko smo se mel dons"
   // would be saying it about nothing.
@@ -7421,16 +7425,15 @@ export default function App() {
       />
     );
 
-  // One month as a grid, shared by the desktop layout (always there, beside
-  // the day panel) and the phone's full calendar (opened on demand, so
-  // `compact`). Days before today are drawn but cannot be picked: what
-  // happened on them lives in the archive, and the window never loads them.
-  // For the same reason the month cannot be turned back past this one.
+  // One month as a grid, shared by the desktop layout (beside the day panel)
+  // and the phone (under the day list, so `compact`). Days before today are
+  // drawn but cannot be picked: what happened on them lives in the archive,
+  // and the window never loads them. For the same reason the month cannot be
+  // turned back past this one.
   //
-  // The dots only appear on days that are loaded. On the phone that is the
-  // two weeks plus anything picked, so a far-off square stays blank until
-  // tapped -- loading every month someone pages past would cost a query per
-  // tap for dots nobody asked for.
+  // Availability dots only appear on days that are loaded -- on the phone the
+  // two weeks plus anything picked. Event marks come from monthEventDays as
+  // well, so those show across the whole month either way.
   // On desktop the day panel follows the month: today when turning back to
   // this month, the 1st otherwise. Left on a day of the month just paged
   // away from, the panel would describe a day the grid no longer shows --
@@ -7775,7 +7778,7 @@ export default function App() {
             </div>
           </div>
 
-          {whatsNewSection}
+          {renderWhatsNewSection()}
         </div>
 
         {appFooter}
@@ -7787,6 +7790,344 @@ export default function App() {
         {deleteEventModal}
         {shareImageSnapshot}
         {shareImageModal}
+      </div>
+    );
+  }
+
+  // The phone's day list: always the same seven days, no "Pokaži še" --
+  // everything further out is reached from the calendar under it.
+  const listDays = baseDays.slice(0, DAYS_SHOWN);
+
+  function renderDayCard(d) {
+    const iso = d;
+    const entries = dayData[iso] || {};
+    const allEntries = Object.entries(entries).sort(([a], [b]) =>
+      a === name ? -1 : b === name ? 1 : a.localeCompare(b)
+    );
+    // Whose two initials the row shows: everyone who has said they are
+    // coming to one of the day's events. Who entered hours is a
+    // different question and a quieter one -- it says when somebody
+    // could come, where this says who is. It still has the entry rows
+    // inside the open day, and the count below when there is no event
+    // to answer for the row.
+    //
+    // A set, because a day can hold two events and somebody may be down
+    // for both; their chip belongs on the row once.
+    //
+    // Shuffled with no place kept for you, or the same handful of names
+    // lead every row, every day. The date is folded into the seed so
+    // different days pick different people rather than all agreeing on
+    // one pair.
+    const dayAttendees = [
+      ...new Set((dayEvents[iso] || []).flatMap((ev) => ev.attendees)),
+    ];
+    const dayChips = shuffleBySeed(
+      dayAttendees,
+      chipSeedRef.current + iso
+    ).map((n) => [n, personColors[n] || NEUTRAL_BG]);
+    const hiddenChips = dayChips.length - DAY_CHIPS_SHOWN;
+    const isOpen = openDay === iso;
+    const isToday = iso === today;
+    // Only the header shrinks; an opened day's contents keep their size.
+    const quiet = isQuietWeekday(iso);
+
+    return (
+      <div key={iso} id={dayAnchorId(iso)} style={styles.dayCard(isToday, isOpen)}>
+        <button
+          style={quiet ? { ...styles.dayHeader, ...styles.dayHeaderQuiet } : styles.dayHeader}
+          onClick={() => openDayCard(iso)}
+        >
+          <div style={styles.dayDateBlock}>
+            <div style={quiet ? { ...styles.dayNum, ...styles.dayNumQuiet } : styles.dayNum}>
+              {dayNumber(d)}
+            </div>
+            <div style={quiet ? { ...styles.dayName, ...styles.dayNameQuiet } : styles.dayName}>
+              {dayLabel(d, today)}
+            </div>
+            {/* A day picked from the full calendar can be months out,
+                where "12 sob" alone no longer says which Saturday. */}
+            {!baseDays.includes(d) && (
+              <div style={styles.dayName}>{monthShort(d)}</div>
+            )}
+          </div>
+          <div style={styles.dayPeople}>
+            {/* The count stands in only on a day with no event at all.
+                With an event but nobody signed up yet the row says
+                nothing here -- "Še nihče ni vnesel" is about hours, and
+                beside a Dogodek badge it would read as though it were
+                about the event. */}
+            {dayChips.length === 0 && !(dayEvents[iso]?.length > 0) ? (
+              <span style={styles.noOne}>
+                {entryCountLabel(allEntries.length)}
+              </span>
+            ) : (
+              <>
+                {dayChips.slice(0, DAY_CHIPS_SHOWN).map(([n, color]) => (
+                  <PersonChip key={n} name={n} color={color} self={n === name} />
+                ))}
+                {hiddenChips > 0 && (
+                  <span
+                    style={styles.avatarChipMore}
+                    title={`Še ${hiddenChips} prijavljenih`}
+                  >
+                    +{hiddenChips}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+          {/* Outside dayPeople on purpose: in there it trailed whatever
+              avatars happened to be present and so landed in a different
+              spot on every row. As a sibling it is pushed to the right
+              by dayPeople's flex: 1 and lines up down the whole list. */}
+          {dayEvents[iso]?.length > 0 && (
+            <span style={styles.eventBadge}>Dogodek</span>
+          )}
+          {/* Friday to Sunday, the same three days that keep the tall row. An
+              outline in the muted text colour rather than a fill: it sorts the
+              week at a glance without competing with the pink Dogodek beside
+              it, which is the badge that actually asks for attention. Last,
+              next to the chevron, so it holds one column down the list
+              whether or not a Dogodek sits to its left. */}
+          {!quiet && <span style={styles.weekendBadge}>Vikend</span>}
+          <ChevronRight
+            size={18}
+            color="var(--text-faint)"
+            style={{
+              transform: isOpen ? "rotate(90deg)" : "none",
+              transition: "transform 150ms ease",
+              flexShrink: 0,
+            }}
+          />
+        </button>
+
+        {isOpen && (
+          <div style={styles.dayDetail}>
+            {editingDay === iso ? (
+              <>
+                <div style={styles.gridHeaderRow}>
+                  <div style={styles.sectionLabel}>
+                    {editingPerson && editingPerson !== name
+                      ? `Urnik – ${editingPerson}`
+                      : "Tvoj urnik"}
+                  </div>
+                  <div style={styles.headerButtonGroup}>
+                    <button style={styles.clearButton} onClick={clearDraft}>
+                      <Eraser size={12} /> Počisti
+                    </button>
+                    {entries[editingPerson || name] && (
+                      <button
+                        style={styles.deleteButton}
+                        onClick={() => deleteMySchedule(iso)}
+                      >
+                        <Trash2 size={12} /> Izbriši vnos
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div style={styles.modeRow}>
+                  <button
+                    style={styles.pillButton(false, GREEN, GREEN_BG)}
+                    onClick={() => fillWholeDay("free")}
+                  >
+                    Prost cel dan
+                  </button>
+                  <button
+                    style={styles.pillButton(false, RED, RED_BG)}
+                    onClick={() => fillWholeDay("busy")}
+                  >
+                    Zaseden cel dan
+                  </button>
+                </div>
+                <div style={styles.modeRow}>
+                  <button
+                    style={styles.pillButton(paintMode === "free", GREEN, GREEN_BG)}
+                    onClick={() => setPaintMode("free")}
+                  >
+                    Označi kot prost
+                  </button>
+                  <button
+                    style={styles.pillButton(paintMode === "busy", RED, RED_BG)}
+                    onClick={() => setPaintMode("busy")}
+                  >
+                    Označi kot zaseden
+                  </button>
+                </div>
+                <p style={styles.hint}>
+                  Klikni ali povleci čez ure. Enak klik na že označeno uro
+                  jo počisti.
+                </p>
+
+                {showNoteInput ? (
+                  <div style={styles.noteBlock}>
+                    <textarea
+                      autoFocus
+                      style={styles.noteTextarea}
+                      rows={2}
+                      maxLength={140}
+                      placeholder='npr. "sem za druženje", "na jošta", "bi šel kdo na pivo ob 18ih"'
+                      value={myNote}
+                      onChange={(e) => setMyNote(e.target.value)}
+                    />
+                    <button
+                      style={styles.noteRemoveButton}
+                      onClick={() => {
+                        setMyNote("");
+                        setShowNoteInput(false);
+                      }}
+                    >
+                      Odstrani opombo
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    style={styles.addNoteButton}
+                    onClick={() => setShowNoteInput(true)}
+                  >
+                    <MessageSquare size={12} /> Dodaj opombo
+                  </button>
+                )}
+
+                <div
+                  ref={gridRef}
+                  style={styles.hourGrid}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                >
+                  {HOURS.map((h) => {
+                    const state = myHours[h];
+                    const bg =
+                      state === "free" ? GREEN : state === "busy" ? RED : NEUTRAL_BG;
+                    const text = state ? "#fff" : NEUTRAL_TEXT;
+                    return (
+                      <div
+                        key={h}
+                        data-hour={h}
+                        onPointerDown={(e) => handlePointerDown(e, h)}
+                        style={{
+                          ...styles.hourCell,
+                          background: bg,
+                          color: text,
+                        }}
+                      >
+                        {h}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={styles.editActionsRow}>
+                  <button
+                    style={styles.cancelButton}
+                    onClick={() => {
+                  setEditingDay(null);
+                  setEditingPerson(null);
+                }}
+                  >
+                    Prekliči
+                  </button>
+                  <button
+                    style={styles.saveButton(false)}
+                    onClick={() => saveMySchedule(iso)}
+                  >
+                    Shrani
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {saved && (
+                  <div style={styles.savedFlash}>Shranjeno ✓</div>
+                )}
+
+                {renderEventSection(iso)}
+
+                {allEntries.length === 0 ? (
+                  <div style={styles.emptyState}>
+                    <p style={styles.emptyStateText}>
+                      Še nihče ni vnesel, kdaj ima čas.
+                    </p>
+                    <button
+                      style={styles.addButton}
+                      onClick={() => startEditing(iso)}
+                    >
+                      Dodaj vnos
+                    </button>
+                  </div>
+                ) : (
+                  <div style={styles.peopleSection}>
+                    <div style={styles.sectionLabel}>Vneseni vnosi</div>
+                    {allEntries.map(([n, e]) => {
+                      const quickStatus = quickStatusText(
+                        e.hours,
+                        dayLabel(d, today)
+                      );
+                      return (
+                      <div key={n} style={styles.entryRowWrap}>
+                        <button
+                          style={styles.entryRow}
+                          onClick={() =>
+                            setViewPerson({
+                              name: n,
+                              hours: e.hours,
+                              note: e.note,
+                              dateText: `${dayNumber(d)}. ${dayLabel(d, today)}`,
+                            })
+                          }
+                        >
+                          <span
+                            style={{
+                              ...styles.entryDot,
+                              background: tierColor(freeBusyTier(e.hours)),
+                            }}
+                          />
+                          <span style={styles.entryTextCol}>
+                            <span style={styles.entryName}>
+                              {n}
+                              {n === name && (
+                                <span style={styles.entryYou}> (ti)</span>
+                              )}
+                              {quickStatus && (
+                                <span style={styles.entryQuickStatus}>
+                                  {" "}
+                                  - {quickStatus}
+                                </span>
+                              )}
+                            </span>
+                            {e.note && (
+                              <span style={styles.entryNoteText}>{e.note}</span>
+                            )}
+                          </span>
+                          <ChevronRight size={15} color="var(--text-fainter)" />
+                        </button>
+                        {(n === name || isAdmin) && (
+                          <button
+                            style={styles.editEntryButton}
+                            onClick={() => startEditing(iso, n)}
+                            aria-label={`Uredi vnos – ${n}`}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                        )}
+                      </div>
+                      );
+                    })}
+                    {!entries[name] && (
+                      <button
+                        style={styles.addButtonSecondary}
+                        onClick={() => startEditing(iso)}
+                      >
+                        + Dodaj svoj vnos
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -7815,375 +8156,41 @@ export default function App() {
         </div>
       )}
 
-      <div style={styles.recentEventsHeading}>Koledar dogodkov</div>
+      {/* The seven days are a look at the week, not the calendar -- that
+          name belongs to the month grid under them, which is the calendar. */}
+      <div style={styles.recentEventsHeading}>Pregled tedna</div>
 
       <div style={styles.list}>
-        {(showAllDays ? days : days.slice(0, DAYS_SHOWN)).map((d) => {
-          const iso = d;
-          const entries = dayData[iso] || {};
-          const allEntries = Object.entries(entries).sort(([a], [b]) =>
-            a === name ? -1 : b === name ? 1 : a.localeCompare(b)
-          );
-          // Whose two initials the row shows: everyone who has said they are
-          // coming to one of the day's events. Who entered hours is a
-          // different question and a quieter one -- it says when somebody
-          // could come, where this says who is. It still has the entry rows
-          // inside the open day, and the count below when there is no event
-          // to answer for the row.
-          //
-          // A set, because a day can hold two events and somebody may be down
-          // for both; their chip belongs on the row once.
-          //
-          // Shuffled with no place kept for you, or the same handful of names
-          // lead every row, every day. The date is folded into the seed so
-          // different days pick different people rather than all agreeing on
-          // one pair.
-          const dayAttendees = [
-            ...new Set((dayEvents[iso] || []).flatMap((ev) => ev.attendees)),
-          ];
-          const dayChips = shuffleBySeed(
-            dayAttendees,
-            chipSeedRef.current + iso
-          ).map((n) => [n, personColors[n] || NEUTRAL_BG]);
-          const hiddenChips = dayChips.length - DAY_CHIPS_SHOWN;
-          const isOpen = openDay === iso;
-          const isToday = iso === today;
-
-          return (
-            <div key={iso} id={dayAnchorId(iso)} style={styles.dayCard(isToday, isOpen)}>
-              <button style={styles.dayHeader} onClick={() => openDayCard(iso)}>
-                <div style={styles.dayDateBlock}>
-                  <div style={styles.dayNum}>{dayNumber(d)}</div>
-                  <div style={styles.dayName}>{dayLabel(d, today)}</div>
-                  {/* A day picked from the full calendar can be months out,
-                      where "12 sob" alone no longer says which Saturday. */}
-                  {!baseDays.includes(d) && (
-                    <div style={styles.dayName}>{monthShort(d)}</div>
-                  )}
-                </div>
-                <div style={styles.dayPeople}>
-                  {/* The count stands in only on a day with no event at all.
-                      With an event but nobody signed up yet the row says
-                      nothing here -- "Še nihče ni vnesel" is about hours, and
-                      beside a Dogodek badge it would read as though it were
-                      about the event. */}
-                  {dayChips.length === 0 && !(dayEvents[iso]?.length > 0) ? (
-                    <span style={styles.noOne}>
-                      {entryCountLabel(allEntries.length)}
-                    </span>
-                  ) : (
-                    <>
-                      {dayChips.slice(0, DAY_CHIPS_SHOWN).map(([n, color]) => (
-                        <PersonChip key={n} name={n} color={color} self={n === name} />
-                      ))}
-                      {hiddenChips > 0 && (
-                        <span
-                          style={styles.avatarChipMore}
-                          title={`Še ${hiddenChips} prijavljenih`}
-                        >
-                          +{hiddenChips}
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-                {/* Outside dayPeople on purpose: in there it trailed whatever
-                    avatars happened to be present and so landed in a different
-                    spot on every row. As a sibling it is pushed to the right
-                    by dayPeople's flex: 1 and lines up down the whole list. */}
-                {dayEvents[iso]?.length > 0 && (
-                  <span style={styles.eventBadge}>Dogodek</span>
-                )}
-                <ChevronRight
-                  size={18}
-                  color="var(--text-faint)"
-                  style={{
-                    transform: isOpen ? "rotate(90deg)" : "none",
-                    transition: "transform 150ms ease",
-                    flexShrink: 0,
-                  }}
-                />
-              </button>
-
-              {isOpen && (
-                <div style={styles.dayDetail}>
-                  {editingDay === iso ? (
-                    <>
-                      <div style={styles.gridHeaderRow}>
-                        <div style={styles.sectionLabel}>
-                          {editingPerson && editingPerson !== name
-                            ? `Urnik – ${editingPerson}`
-                            : "Tvoj urnik"}
-                        </div>
-                        <div style={styles.headerButtonGroup}>
-                          <button style={styles.clearButton} onClick={clearDraft}>
-                            <Eraser size={12} /> Počisti
-                          </button>
-                          {entries[editingPerson || name] && (
-                            <button
-                              style={styles.deleteButton}
-                              onClick={() => deleteMySchedule(iso)}
-                            >
-                              <Trash2 size={12} /> Izbriši vnos
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <div style={styles.modeRow}>
-                        <button
-                          style={styles.pillButton(false, GREEN, GREEN_BG)}
-                          onClick={() => fillWholeDay("free")}
-                        >
-                          Prost cel dan
-                        </button>
-                        <button
-                          style={styles.pillButton(false, RED, RED_BG)}
-                          onClick={() => fillWholeDay("busy")}
-                        >
-                          Zaseden cel dan
-                        </button>
-                      </div>
-                      <div style={styles.modeRow}>
-                        <button
-                          style={styles.pillButton(paintMode === "free", GREEN, GREEN_BG)}
-                          onClick={() => setPaintMode("free")}
-                        >
-                          Označi kot prost
-                        </button>
-                        <button
-                          style={styles.pillButton(paintMode === "busy", RED, RED_BG)}
-                          onClick={() => setPaintMode("busy")}
-                        >
-                          Označi kot zaseden
-                        </button>
-                      </div>
-                      <p style={styles.hint}>
-                        Klikni ali povleci čez ure. Enak klik na že označeno uro
-                        jo počisti.
-                      </p>
-
-                      {showNoteInput ? (
-                        <div style={styles.noteBlock}>
-                          <textarea
-                            autoFocus
-                            style={styles.noteTextarea}
-                            rows={2}
-                            maxLength={140}
-                            placeholder='npr. "sem za druženje", "na jošta", "bi šel kdo na pivo ob 18ih"'
-                            value={myNote}
-                            onChange={(e) => setMyNote(e.target.value)}
-                          />
-                          <button
-                            style={styles.noteRemoveButton}
-                            onClick={() => {
-                              setMyNote("");
-                              setShowNoteInput(false);
-                            }}
-                          >
-                            Odstrani opombo
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          style={styles.addNoteButton}
-                          onClick={() => setShowNoteInput(true)}
-                        >
-                          <MessageSquare size={12} /> Dodaj opombo
-                        </button>
-                      )}
-
-                      <div
-                        ref={gridRef}
-                        style={styles.hourGrid}
-                        onPointerMove={handlePointerMove}
-                        onPointerUp={handlePointerUp}
-                        onPointerCancel={handlePointerUp}
-                      >
-                        {HOURS.map((h) => {
-                          const state = myHours[h];
-                          const bg =
-                            state === "free" ? GREEN : state === "busy" ? RED : NEUTRAL_BG;
-                          const text = state ? "#fff" : NEUTRAL_TEXT;
-                          return (
-                            <div
-                              key={h}
-                              data-hour={h}
-                              onPointerDown={(e) => handlePointerDown(e, h)}
-                              style={{
-                                ...styles.hourCell,
-                                background: bg,
-                                color: text,
-                              }}
-                            >
-                              {h}
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <div style={styles.editActionsRow}>
-                        <button
-                          style={styles.cancelButton}
-                          onClick={() => {
-                        setEditingDay(null);
-                        setEditingPerson(null);
-                      }}
-                        >
-                          Prekliči
-                        </button>
-                        <button
-                          style={styles.saveButton(false)}
-                          onClick={() => saveMySchedule(iso)}
-                        >
-                          Shrani
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {saved && (
-                        <div style={styles.savedFlash}>Shranjeno ✓</div>
-                      )}
-
-                      {renderEventSection(iso)}
-
-                      {allEntries.length === 0 ? (
-                        <div style={styles.emptyState}>
-                          <p style={styles.emptyStateText}>
-                            Še nihče ni vnesel, kdaj ima čas.
-                          </p>
-                          <button
-                            style={styles.addButton}
-                            onClick={() => startEditing(iso)}
-                          >
-                            Dodaj vnos
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={styles.peopleSection}>
-                          <div style={styles.sectionLabel}>Vneseni vnosi</div>
-                          {allEntries.map(([n, e]) => {
-                            const quickStatus = quickStatusText(
-                              e.hours,
-                              dayLabel(d, today)
-                            );
-                            return (
-                            <div key={n} style={styles.entryRowWrap}>
-                              <button
-                                style={styles.entryRow}
-                                onClick={() =>
-                                  setViewPerson({
-                                    name: n,
-                                    hours: e.hours,
-                                    note: e.note,
-                                    dateText: `${dayNumber(d)}. ${dayLabel(d, today)}`,
-                                  })
-                                }
-                              >
-                                <span
-                                  style={{
-                                    ...styles.entryDot,
-                                    background: tierColor(freeBusyTier(e.hours)),
-                                  }}
-                                />
-                                <span style={styles.entryTextCol}>
-                                  <span style={styles.entryName}>
-                                    {n}
-                                    {n === name && (
-                                      <span style={styles.entryYou}> (ti)</span>
-                                    )}
-                                    {quickStatus && (
-                                      <span style={styles.entryQuickStatus}>
-                                        {" "}
-                                        - {quickStatus}
-                                      </span>
-                                    )}
-                                  </span>
-                                  {e.note && (
-                                    <span style={styles.entryNoteText}>{e.note}</span>
-                                  )}
-                                </span>
-                                <ChevronRight size={15} color="var(--text-fainter)" />
-                              </button>
-                              {(n === name || isAdmin) && (
-                                <button
-                                  style={styles.editEntryButton}
-                                  onClick={() => startEditing(iso, n)}
-                                  aria-label={`Uredi vnos – ${n}`}
-                                >
-                                  <Pencil size={13} />
-                                </button>
-                              )}
-                            </div>
-                            );
-                          })}
-                          {!entries[name] && (
-                            <button
-                              style={styles.addButtonSecondary}
-                              onClick={() => startEditing(iso)}
-                            >
-                              + Dodaj svoj vnos
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
+        {listDays.map(renderDayCard)}
+        {/* A day from beyond the seven sits apart, under a line, so it is
+            plain that it was picked rather than that the list skipped ahead. */}
+        {pickedDay && !listDays.includes(pickedDay) && (
+          <>
+            <div style={styles.pickedDivider}>
+              <span style={styles.pickedDividerLine} />
+              Izbran dan
+              <span style={styles.pickedDividerLine} />
             </div>
-          );
-        })}
-        {/* Only once the list is expanded: the full calendar is for reaching
-            past the two weeks, and someone who has not yet looked at the
-            second week is not after that. Above "Pokaži manj", so collapsing
-            stays the last thing in the list as it was. */}
-        {showAllDays &&
-          (showFullCal ? (
-            <div style={styles.fullCalWrap}>
-              {renderMonthCalendar(
-                openDay,
-                (d) => {
-                  setShowFullCal(false);
-                  openEventDay(d);
-                },
-                true
-              )}
-              <button style={styles.moreDaysButton} onClick={() => setShowFullCal(false)}>
-                Skrij koledar
-              </button>
-            </div>
-          ) : (
-            <button
-              style={styles.moreDaysButton}
-              onClick={() => {
-                setCalMonth(monthOf(today));
-                setShowFullCal(true);
-              }}
-            >
-              <CalendarDays size={14} /> Pokaži celoten koledar
-            </button>
-          ))}
-        {days.length > DAYS_SHOWN && (
-          <button
-            style={styles.moreDaysButton}
-            onClick={() => {
-              setShowAllDays((open) => !open);
-              setShowFullCal(false);
-            }}
-          >
-            {showAllDays
-              ? "Pokaži manj"
-              : `Pokaži še ${days.length - DAYS_SHOWN} ${pluralSl(
-                  days.length - DAYS_SHOWN,
-                  ["dan", "dneva", "dnevi", "dni"]
-                )}`}
-          </button>
+            {renderDayCard(pickedDay)}
+          </>
         )}
+        {/* Always open, right under the last day. It began behind a button
+            that only appeared once the list was expanded, then behind one
+            that was always there -- and either way it was a tap between you
+            and a day next month. Picking a day leaves it open: the day gets
+            its card under the divider above and scrolls into view, and the
+            calendar is still here for the next one. Under a heading of its
+            own, so it reads as the next section rather than as the week's
+            last card. */}
       </div>
 
-      {whatsNewSection}
+      <div style={styles.calendarHeading}>Koledar dogodkov</div>
+
+      <div style={styles.list}>
+        {renderMonthCalendar(openDay, openEventDay, true)}
+      </div>
+
+      {renderWhatsNewSection()}
 
       {appFooter}
 

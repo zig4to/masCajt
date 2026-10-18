@@ -486,3 +486,19 @@ test("accountName: the account's name in the hub's shapes, surname required", ()
   assert.equal(m.accountName({ user_metadata: {} }), "");
   assert.equal(m.accountName(undefined), "");
 });
+
+test("archiveInitialLower: six whole months, this one included", () => {
+  assert.equal(m.archiveInitialLower("2026-10-18"), "2026-05-01");
+  // Across the turn of the year.
+  assert.equal(m.archiveInitialLower("2027-02-03"), "2026-09-01");
+  assert.equal(m.archiveInitialLower("2026-06-01"), "2026-01-01");
+});
+
+test("isQuietWeekday: Monday to Thursday only, Friday is weekend", () => {
+  // 2026-10-19 is a Monday.
+  assert.equal(m.isQuietWeekday("2026-10-19"), true);
+  assert.equal(m.isQuietWeekday("2026-10-22"), true); // četrtek
+  assert.equal(m.isQuietWeekday("2026-10-23"), false); // petek
+  assert.equal(m.isQuietWeekday("2026-10-24"), false); // sobota
+  assert.equal(m.isQuietWeekday("2026-10-25"), false); // nedelja
+});

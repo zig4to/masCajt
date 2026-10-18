@@ -652,6 +652,17 @@ export const styles = {
     padding: "0 20px",
     marginBottom: 14,
   },
+  // The same heading again further down the page, under the week: the top
+  // margin is what the heading would otherwise get from the strip above it.
+  calendarHeading: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: GREEN,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    padding: "0 20px",
+    margin: "26px 0 14px",
+  },
   // The "Aktualni dogodki" heading as a row, so the folded moved-event badge
   // can sit at its right edge.
   recentEventsHeadingRow: {
@@ -944,6 +955,19 @@ export const styles = {
     textTransform: "capitalize",
     fontWeight: 600,
   },
+  // Monday-Thursday rows (isQuietWeekday): the same row, tighter. Kept tall
+  // enough for the 26px chips and Dogodek badge, which do not shrink, so a
+  // weekday that does have something on still shows it whole.
+  dayHeaderQuiet: {
+    padding: "6px 14px",
+  },
+  dayNumQuiet: {
+    fontSize: 16,
+    lineHeight: 1.05,
+  },
+  dayNameQuiet: {
+    fontSize: 11,
+  },
   dayPeople: {
     flex: 1,
     display: "flex",
@@ -1012,6 +1036,23 @@ export const styles = {
     WebkitAppearance: "none",
     WebkitTapHighlightColor: "transparent",
   }),
+  // Lettered like eventBadge, but outlined and muted and a size down: a
+  // label for the row, not a call to look at it.
+  weekendBadge: {
+    height: 20,
+    flexShrink: 0,
+    boxSizing: "border-box",
+    padding: "0 7px",
+    borderRadius: 10,
+    border: "1px solid var(--border)",
+    color: "var(--text-muted)",
+    fontSize: 9,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    display: "flex",
+    alignItems: "center",
+  },
   eventBadge: {
     height: 26,
     flexShrink: 0,
@@ -2185,43 +2226,33 @@ export const styles = {
     borderRadius: 10,
     cursor: "pointer",
   },
-  archiveIntro: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: 6,
-    padding: "0 20px 16px 20px",
-  },
-  // A way back that does not depend on finding the menu again. The menu
-  // still offers it; this is the one you reach for without thinking.
-  archiveBack: {
+  // The foot-of-page buttons' look, stretched across the whole width: of the
+  // four it is the one that opens onto a list of its own.
+  archiveToggle: {
+    alignSelf: "stretch",
     display: "flex",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 4,
-    padding: "5px 10px 5px 8px",
-    fontSize: 12.5,
-    fontWeight: 700,
+    gap: 8,
+    padding: "13px 14px",
+    fontSize: 13,
+    fontWeight: 800,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
     color: GREEN,
     background: GREEN_BG,
     border: "none",
-    borderRadius: 9,
+    borderRadius: 12,
     cursor: "pointer",
+    // Breathing room above it when the menu scrolls it into view.
+    scrollMarginTop: 16,
   },
-  archiveHeading: {
-    fontSize: 22,
-    fontWeight: 800,
-    color: "var(--text-heading)",
-  },
-  archiveSubheading: {
-    fontSize: 13,
-    color: "var(--text-muted)",
-  },
+  // No side padding: it now sits inside the foot-of-page section, which has
+  // its own, rather than on a page edge of its own.
   archiveList: {
     display: "flex",
     flexDirection: "column",
     gap: 10,
-    padding: "0 16px",
+    marginBottom: 6,
   },
   archiveEmpty: {
     padding: "18px 4px",
@@ -2661,6 +2692,25 @@ export const styles = {
         }
       : {}),
   }),
+  // A rule across the list with its label sitting on it, between the seven
+  // fixed days and the one picked from the calendar. The label is lettered
+  // like recentEventsHeading, so it reads as one of the page's headings.
+  pickedDivider: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    margin: "8px 2px 4px",
+    fontSize: 12,
+    fontWeight: 800,
+    color: GREEN,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  pickedDividerLine: {
+    flex: 1,
+    height: 1,
+    background: "var(--border)",
+  },
   monthCalHeader: {
     display: "flex",
     alignItems: "center",
@@ -2728,11 +2778,6 @@ export const styles = {
     padding: 2,
     minWidth: 0,
   }),
-  fullCalWrap: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
   daySquareNum: {
     fontSize: 14.5,
     fontWeight: 800,
