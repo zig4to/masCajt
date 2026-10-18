@@ -107,8 +107,10 @@ every `push:*` subscription row except the event's creator.
   ProjektiBaze — as the TomStudios hub). `index.html` awaits `requireSignIn()` before rendering the app;
   arriving from the hub signs in automatically (`#sb_at`/`#sb_rt` hash, or the session the hub left in
   localStorage on the shared `zig4to.github.io` origin). RLS grants `kv_store` only to `authenticated`.
-  The person's calendar *name* is still chosen per device (`my-name`), deliberately not taken from the
-  account. Access is also per user: RLS policies require `has_app_access('mascajt')`, which an admin
+  The person's calendar *name* comes from the account (`user_metadata` first/last name, via
+  `window.authUser` and `accountName()`), so the name screen only appears for an account with no name;
+  a name typed there is written back to the account (`window.authSetName`). A name already saved on the
+  device (`my-name`) still wins over the account's, so differently spelled old entries don't split. Access is also per user: RLS policies require `has_app_access('mascajt')`, which an admin
   grants in the TomStudios hub (Administracija); `auth.js` shows a "no access" screen otherwise.
   `ADMIN_NAME`/`AUTH_CODE` (top of `skupni-koledar.jsx`) still gate admin-only actions.
 - Never put a Supabase `service_role` key in client code (`index.html`, `skupni-koledar.jsx`, or

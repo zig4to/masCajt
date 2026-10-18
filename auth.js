@@ -10,9 +10,10 @@
 //   zato supabase-js najde hubovo sejo v localStorage (isti projekt, isti
 //   privzeti storageKey).
 //
-// Ime osebe v koledarju je s tem namenoma nepovezano: še vedno ga vsak
-// izbere na napravi ("my-name"), da se obstoječi vnosi ne razcepijo zaradi
-// drugače zapisanega imena v računu.
+// Ime osebe v koledarju se vzame iz računa (user_metadata first_name/
+// last_name), zato zaslona za vpis imena ni več. Ime, ki je na napravi že
+// shranjeno ("my-name"), ima prednost, da se obstoječi vnosi ne razcepijo
+// zaradi drugače zapisanega imena v računu (glej accountName v koledarju).
 
 const $ = (id) => document.getElementById(id);
 

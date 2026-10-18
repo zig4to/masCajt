@@ -3,11 +3,13 @@ import {
   useEffect,
   useLayoutEffect,
   useCallback,
+  useMemo,
   useRef,
 } from "react";
 import {
   Users,
   ChevronRight,
+  ChevronLeft,
   Pencil,
   Eraser,
   Trash2,
@@ -490,6 +492,13 @@ export function monthLabel(month) {
   return name ? `${name} ${month.slice(0, 4)}` : month;
 }
 
+// "dec" -- lower-case, because it sits under a weekday abbreviation on a day
+// row rather than heading anything.
+export function monthShort(iso) {
+  const name = MONTH_NAMES_SL[monthNumber(iso) - 1];
+  return name ? name.slice(0, 3).toLowerCase() : "";
+}
+
 // The month before this one, as a first-of-month date. Written out rather
 // than done with a Date: the archive walks backwards past January, and a
 // month arithmetic bug there would silently skip a year of history.
@@ -499,6 +508,39 @@ export function prevMonthStart(month) {
   const py = m === 1 ? year - 1 : year;
   const pm = m === 1 ? 12 : m - 1;
   return `${py}-${String(pm).padStart(2, "0")}-01`;
+}
+
+// The month after this one, as a month ("2026-12" -> "2027-01"). Written out
+// for the same reason as prevMonthStart: the month view steps forward past
+// December, and a Date-based version is one DST or timezone slip away from
+// landing on the wrong month.
+export function nextMonth(month) {
+  const year = Number(month.slice(0, 4));
+  const m = Number(month.slice(5, 7));
+  const ny = m === 12 ? year + 1 : year;
+  const nm = m === 12 ? 1 : m + 1;
+  return `${ny}-${String(nm).padStart(2, "0")}`;
+}
+
+export function prevMonth(month) {
+  return monthOf(prevMonthStart(month));
+}
+
+export function lastDayOfMonth(month) {
+  return addDays(`${nextMonth(month)}-01`, -1);
+}
+
+// One month laid out for a seven-column grid, Monday first the way a
+// Slovenian wall calendar is: leading nulls for the weekdays before the 1st,
+// then every date of the month. No trailing padding -- the grid simply ends
+// on the last row, which reads fine and saves rendering empty cells.
+export function monthGridCells(month) {
+  const first = `${month}-01`;
+  const lead = (utcFromIso(first).getUTCDay() + 6) % 7;
+  const cells = Array.from({ length: lead }, () => null);
+  const last = lastDayOfMonth(month);
+  for (let iso = first; iso <= last; iso = addDays(iso, 1)) cells.push(iso);
+  return cells;
 }
 
 // Scroll target for a day, shared by the mobile accordion card and the
@@ -597,6 +639,25 @@ export function splitName(full) {
 
 export function hasSurname(full) {
   return (full || "").trim().split(/\s+/).filter(Boolean).length >= 2;
+}
+
+// The calendar name a TomStudios account already carries, or "" when it has
+// none. Reads user_metadata in the same shapes the hub's fullNameFor does --
+// first_name/last_name from its sign-up form, else given/family or a single
+// full_name/name/display_name -- so the two never disagree about who you are.
+// Only a name with a surname counts: a first name alone is what the name
+// screen exists to refuse, and two "Žiga"s would share one row of entries.
+export function accountName(user) {
+  const meta = (user && user.user_metadata) || {};
+  let first = String(meta.first_name || meta.given_name || "").trim();
+  let last = String(meta.last_name || meta.family_name || "").trim();
+  if (!first && !last) {
+    ({ first, last } = splitName(
+      String(meta.full_name || meta.name || meta.display_name || "")
+    ));
+  }
+  const full = normalizeName(first, last);
+  return hasSurname(full) ? full : "";
 }
 
 // Keys look like "avail:2026-08-20:Ime Priimek"; everything past the second
@@ -1598,6 +1659,16 @@ function archiveSlabLower(upper) {
 // grows past the point where anybody reads it.
 const CHANGELOG = [
   {
+    date: "2026-10-18",
+    items: [
+      "Na telefonu: pod razširjenim seznamom gumb Pokaži celoten koledar",
+      "V celotnem koledarju izbereš katerikoli dan naprej in mu dodaš dogodek",
+      "Na računalniku je koledar za cel mesec, s puščicama listaš po mesecih",
+      "Naslednji dogodek se pokaže zgoraj, tudi če je več kot dva tedna naprej",
+      "Ime in priimek se vzameta iz tvojega računa, vpisovati ju ni več treba",
+    ],
+  },
+  {
     date: "2026-08-25",
     items: [
       "Pri komentarju piše ura in datum, desno od imena",
@@ -1669,6 +1740,9 @@ const CHANGELOG = [
 ];
 
 const DAYS_SHOWN = 7;
+
+// Column heads of the month grid, Monday first to match monthGridCells.
+const MONTH_GRID_WEEKDAYS = ["pon", "tor", "sre", "čet", "pet", "sob", "ned"];
 
 // Below this the gesture reads as a tap or a stray wobble, not a swipe, and
 // the strip springs back to where it was.
@@ -2614,7 +2688,30 @@ export default function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [pinDraft, setPinDraft] = useState("");
   const [authError, setAuthError] = useState(false);
-  const [days, setDays] = useState([]);
+  // The fixed window every visit opens on: two weeks from today. `days`
+  // below is this plus whatever the month view or a picked day has asked
+  // for on top, and is what everything else reads.
+  const [baseDays, setBaseDays] = useState([]);
+  // Days past the window that someone picked from the full calendar on the
+  // phone. Kept as single days rather than stretching the window to reach
+  // them: picking a Saturday two months out should add that Saturday to the
+  // list, not sixty empty rows above it.
+  const [extraDays, setExtraDays] = useState([]);
+  // The month the full calendar shows -- the desktop grid always, the phone's
+  // only once opened. Shared, so a window resized across the breakpoint keeps
+  // the month you were on.
+  const [calMonth, setCalMonth] = useState(() => monthOf(todayIso()));
+  const [showFullCal, setShowFullCal] = useState(false);
+  // Which days of the shown month hold an event: "2026-12" -> [iso]. Read on
+  // its own because on the phone most of that month is not in `days`, and
+  // without it the full calendar could only mark events in the two weeks the
+  // list already shows -- exactly the ones you did not open it for.
+  const [monthEventDays, setMonthEventDays] = useState({});
+  // The day of the nearest event past the two weeks, looked up only when
+  // those two weeks hold nothing after today. Without it "Naslednji dogodek"
+  // and the event strip went blank for anything planned three weeks out, as
+  // if nothing were planned at all.
+  const [aheadIso, setAheadIso] = useState(null);
   const [dayData, setDayData] = useState({}); // { iso: { name: { hours, note } } }
   const [openDay, setOpenDay] = useState(null);
   const [scrollToDay, setScrollToDay] = useState(null);
@@ -2792,8 +2889,112 @@ export default function App() {
 
   useEffect(() => {
     const start = todayIso();
-    setDays(Array.from({ length: 14 }, (_, i) => addDays(start, i)));
+    setBaseDays(Array.from({ length: 14 }, (_, i) => addDays(start, i)));
   }, []);
+
+  // Memoised so its identity only changes when its inputs do: loadAllData and
+  // the realtime window both key off it, and a fresh array each render would
+  // refetch the whole calendar on every keystroke.
+  //
+  // On desktop the shown month is loaded whole, from today up to its last day,
+  // so every square in its grid has data behind it. Never anything before
+  // today -- the past belongs to the archive, and `today` is read as days[0].
+  const days = useMemo(() => {
+    if (!baseDays.length) return baseDays;
+    const start = baseDays[0];
+    const all = new Set(baseDays);
+    if (isDesktop) {
+      const last = lastDayOfMonth(calMonth);
+      for (let iso = start; iso <= last; iso = addDays(iso, 1)) all.add(iso);
+    }
+    for (const iso of extraDays) if (iso >= start) all.add(iso);
+    // Loaded like any other day, so the card on top can be answered from
+    // there -- attendance, comments and realtime all need the day in `days`.
+    if (aheadIso && aheadIso >= start) all.add(aheadIso);
+    return [...all].sort();
+  }, [baseDays, extraDays, calMonth, isDesktop, aheadIso]);
+
+  // Booleans rather than dayEvents itself in the effect's deps, so it asks
+  // the server only when the answer can have changed: an event appearing in
+  // the two weeks (no lookahead needed), or the looked-ahead day losing its
+  // event. An array there, empty, is a loaded day with nothing on it --
+  // undefined is one not read yet, and must not count as gone or this would
+  // re-ask in a loop before the day ever loads.
+  const windowHasNext = baseDays.some(
+    (iso) => iso > baseDays[0] && dayEvents[iso]?.length > 0
+  );
+  const aheadGone =
+    !!aheadIso && Array.isArray(dayEvents[aheadIso]) && dayEvents[aheadIso].length === 0;
+  useEffect(() => {
+    if (!name || !firstLoadDone || !baseDays.length) return;
+    if (windowHasNext) {
+      setAheadIso(null);
+      return;
+    }
+    if (aheadIso && !aheadGone) return;
+    const lastBase = baseDays[baseDays.length - 1];
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await window.storage.firstKey(
+          `avail:%${EVENT_MARKER}%`,
+          true,
+          `avail:${addDays(lastBase, 1)}`
+        );
+        const key = res && res.key;
+        const iso = key && isoFromKey(key);
+        // Checked rather than trusted: an index.html cached from before the
+        // lower bound existed ignores it and answers with the oldest event
+        // ever, and LIKE reads the markers' underscores as wildcards.
+        const ok =
+          iso &&
+          iso > lastBase &&
+          /^\d{4}-\d{2}-\d{2}$/.test(iso) &&
+          (personFromKey(key) || "").startsWith(EVENT_MARKER);
+        if (!cancelled) setAheadIso(ok ? iso : null);
+      } catch (e) {
+        console.info("Next event lookup unavailable:", e?.message || e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [name, firstLoadDone, baseDays, windowHasNext, aheadGone]);
+
+  // Re-read every time the month comes into view rather than cached for the
+  // session: the realtime feed drops changes to days outside `days`, so an
+  // event someone added to a far-off day since the last look would otherwise
+  // never get its mark. One range query per month turned to, keys only
+  // looked at -- cheap next to what loadAllData already pulls.
+  useEffect(() => {
+    if (!name || !(isDesktop || showFullCal)) return;
+    const month = calMonth;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await window.storage.range(
+          `avail:${month}-01`,
+          `avail:${nextMonth(month)}-01`,
+          true
+        );
+        const found = new Set();
+        for (const row of (res && res.rows) || []) {
+          const person = personFromKey(row.key);
+          const iso = isoFromKey(row.key);
+          if (person && person.startsWith(EVENT_MARKER) && iso && monthOf(iso) === month) {
+            found.add(iso);
+          }
+        }
+        if (!cancelled) setMonthEventDays((prev) => ({ ...prev, [month]: [...found] }));
+      } catch (e) {
+        // Only the marks are lost; the calendar itself still works.
+        console.info("Month events unavailable:", e?.message || e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [name, calMonth, showFullCal, isDesktop]);
 
   useEffect(() => {
     const styleEl = document.createElement("style");
@@ -2945,18 +3146,39 @@ export default function App() {
     }
   }
 
+  // Since sign-in became a TomStudios account, the account's own name stands
+  // in for the name screen: whoever is signed in is who is using the
+  // calendar. A name already saved on this device still wins, though --
+  // someone who entered "Ziga Skater" here long before the account said
+  // "Žiga Škater" has their entries under the first spelling, and quietly
+  // switching would strand them. The name screen is left only for an account
+  // that has no name stored at all.
   useEffect(() => {
     (async () => {
+      const fromAccount = accountName(window.authUser);
       try {
         const res = await window.storage.get("my-name", false);
         if (res && res.value) {
-          setName(res.value);
-          // Names saved before surnames were required: keep the identity so
-          // existing entries can be migrated, but ask for the surname first.
-          if (!hasSurname(res.value)) {
+          if (hasSurname(res.value)) {
+            setName(res.value);
+          } else if (fromAccount) {
+            // Saved before surnames were required. The account supplies the
+            // surname the old screen used to ask for, and commitName carries
+            // the entries across from the bare first name.
+            setName(res.value);
+            await commitName(fromAccount, res.value);
+          } else {
+            // No account name to fall back on: keep the identity so existing
+            // entries can be migrated, but ask for the surname first.
+            setName(res.value);
             setFirstDraft(splitName(res.value).first);
             setNeedsSurname(true);
           }
+        } else if (fromAccount) {
+          // No clash check, unlike the name screen: entries already under this
+          // name are, as good as certain, this same person's from another
+          // device, and picking them up is the point.
+          await commitName(fromAccount);
         }
       } catch (e) {
         console.info("No saved name yet:", e?.message || e);
@@ -3507,15 +3729,20 @@ export default function App() {
       // Arriving from outside the list at a particular day: a push notification
       // carries "#<iso>", and a shared event link carries "#e=<iso>:<id>". Both
       // land the tap on that day rather than at the top of the calendar. Guarded
-      // to the visible window -- a notification or link left for two weeks points
-      // at a day no longer shown, so it falls through to the plain list rather
-      // than scrolling nowhere.
+      // to today onwards -- a notification or link left for two weeks points
+      // at a day now in the archive, so it falls through to the plain list
+      // rather than scrolling nowhere. A day further out than the window is
+      // fine: openEventDay adds it, the same as picking it from the calendar.
       const fromHash = (window.location.hash || "").replace(/^#/, "");
       const shared = parseEventShareHash(window.location.hash);
+      // The round trip through addDays rejects a well-formed but impossible
+      // date ("2026-02-31"), which would otherwise join the list as a day
+      // that does not exist.
+      const upcoming = (iso) => iso >= days[0] && addDays(iso, 0) === iso;
       const targetIso =
-        shared && days.includes(shared.iso)
+        shared && upcoming(shared.iso)
           ? shared.iso
-          : /^\d{4}-\d{2}-\d{2}$/.test(fromHash) && days.includes(fromHash)
+          : /^\d{4}-\d{2}-\d{2}$/.test(fromHash) && upcoming(fromHash)
             ? fromHash
             : null;
       if (targetIso) {
@@ -3567,8 +3794,9 @@ export default function App() {
     }
   }
 
-  async function commitName(full) {
-    const previous = name;
+  // `previous` is passed explicitly only from the mount effect, whose `name`
+  // is still the first render's null.
+  async function commitName(full, previous = name) {
     setName(full);
     setDuplicateName(null);
     setNeedsSurname(false);
@@ -3579,6 +3807,19 @@ export default function App() {
     } catch (e) {
       console.error("saveName storage error:", e);
       setError("Ime se ni shranilo za naslednjič (a lahko nadaljuješ zdaj).");
+    }
+    // A name typed here (an account with none yet, or a rename) goes back to
+    // the account too, so the next device -- and the hub -- already know it
+    // and the name screen never comes up again. Not awaited, and a failure
+    // only costs that convenience: this device has the name either way.
+    if (window.authSetName && full !== accountName(window.authUser)) {
+      const { first, last } = splitName(full);
+      window
+        .authSetName(first, last)
+        .then((user) => {
+          if (user) window.authUser = user;
+        })
+        .catch((e) => console.info("Account name not updated:", e?.message || e));
     }
     if (previous && previous !== full) await migrateEntries(previous, full);
   }
@@ -3747,10 +3988,17 @@ export default function App() {
   // collapsed card used to be. Handing the iso to state lets the effect below
   // run it once React has laid the expanded day out.
   function openEventDay(iso) {
-    // An event can sit past the tenth day, where its card is not rendered
+    // An event can sit past the seventh day, where its card is not rendered
     // at all. Scrolling to it would find nothing, so reveal the rest of
     // the list first -- the effect that scrolls runs after that render.
-    if (days.indexOf(iso) >= DAYS_SHOWN) setShowAllDays(true);
+    if (!days.slice(0, DAYS_SHOWN).includes(iso)) setShowAllDays(true);
+    // A day outside what is loaded (picked from the full calendar, or a
+    // notification about an event weeks out) joins the list first. The
+    // desktop grid shows one month, so it turns to the day's month instead.
+    if (!days.includes(iso)) {
+      setExtraDays((prev) => (prev.includes(iso) ? prev : [...prev, iso]));
+    }
+    setCalMonth(monthOf(iso));
     selectDay(iso);
     setScrollToDay(iso);
   }
@@ -4996,8 +5244,13 @@ export default function App() {
   // the archive has loaded, and handing the whole map to eventsNearestFirst
   // put last month's outings in "Aktualni dogodki" the moment anyone opened
   // the archive.
+  //
+  // The base two weeks only, not everything `days` has grown to: paging the
+  // desktop month view forward would otherwise fill the strip with events
+  // from whichever month you happened to look at last. The looked-ahead day
+  // joins them: it is only set when the two weeks hold nothing further on.
   const upcomingEvents = {};
-  for (const iso of days) {
+  for (const iso of aheadIso ? [...baseDays, aheadIso] : baseDays) {
     if (dayEvents[iso]) upcomingEvents[iso] = dayEvents[iso];
   }
   const recentEvents = eventsNearestFirst(upcomingEvents);
@@ -7168,6 +7421,89 @@ export default function App() {
       />
     );
 
+  // One month as a grid, shared by the desktop layout (always there, beside
+  // the day panel) and the phone's full calendar (opened on demand, so
+  // `compact`). Days before today are drawn but cannot be picked: what
+  // happened on them lives in the archive, and the window never loads them.
+  // For the same reason the month cannot be turned back past this one.
+  //
+  // The dots only appear on days that are loaded. On the phone that is the
+  // two weeks plus anything picked, so a far-off square stays blank until
+  // tapped -- loading every month someone pages past would cost a query per
+  // tap for dots nobody asked for.
+  // On desktop the day panel follows the month: today when turning back to
+  // this month, the 1st otherwise. Left on a day of the month just paged
+  // away from, the panel would describe a day the grid no longer shows --
+  // and once the window shrinks back, one that is not even loaded.
+  function goToMonth(month) {
+    setCalMonth(month);
+    if (isDesktop) selectDay(month === monthOf(today) ? today : `${month}-01`);
+  }
+
+  function renderMonthCalendar(selectedIso, onPick, compact) {
+    const atFirstMonth = calMonth <= monthOf(today);
+    return (
+      <div style={styles.monthCal(compact)}>
+        <div style={styles.monthCalHeader}>
+          <button
+            style={styles.monthNavButton(atFirstMonth)}
+            disabled={atFirstMonth}
+            onClick={() => goToMonth(prevMonth(calMonth))}
+            aria-label="Prejšnji mesec"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <div style={styles.monthCalTitle}>{monthLabel(calMonth)}</div>
+          <button
+            style={styles.monthNavButton(false)}
+            onClick={() => goToMonth(nextMonth(calMonth))}
+            aria-label="Naslednji mesec"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+        <div style={styles.monthGrid}>
+          {MONTH_GRID_WEEKDAYS.map((w) => (
+            <div key={w} style={styles.monthCalWeekday}>
+              {w}
+            </div>
+          ))}
+          {monthGridCells(calMonth).map((d, i) => {
+            if (!d) return <div key={`pad-${i}`} />;
+            const isPast = d < today;
+            const people = Object.entries(dayData[d] || {}).filter(([n]) => n !== name);
+            const hasFree = people.some(([, e]) => dominantStatus(e.hours) === "free");
+            const hasBusy = people.some(([, e]) => dominantStatus(e.hours) === "busy");
+            // A loaded day answers from dayEvents, which realtime keeps live --
+            // an event deleted a moment ago must lose its mark now, not on the
+            // next month turn. Only days outside `days` fall back to the read.
+            const hasEvent =
+              !isPast &&
+              (days.includes(d)
+                ? dayEvents[d]?.length > 0
+                : (monthEventDays[calMonth] || []).includes(d));
+            return (
+              <button
+                key={d}
+                style={styles.monthDay(d === selectedIso, d === today, isPast, hasEvent)}
+                disabled={isPast}
+                onClick={() => onPick(d)}
+                aria-label={hasEvent ? `${dayNumber(d)}. – dogodek` : undefined}
+              >
+                <div style={styles.daySquareNum}>{dayNumber(d)}</div>
+                <div style={styles.daySquareDots}>
+                  {hasEvent && <span style={styles.miniDot(PINK)} />}
+                  {!isPast && hasFree && <span style={styles.miniDot(GREEN)} />}
+                  {!isPast && hasBusy && <span style={styles.miniDot(RED)} />}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   if (isDesktop) {
     const iso = openDay || today || null;
     const selectedIso = days.includes(iso) ? iso : today;
@@ -7205,35 +7541,7 @@ export default function App() {
           <div style={styles.recentEventsHeading}>Koledar dogodkov</div>
 
           <div style={styles.desktopLayout}>
-            <div style={styles.dayGrid}>
-              {days.map((d) => {
-                const dIso = d;
-                const dEntries = dayData[dIso] || {};
-                const people = Object.entries(dEntries).filter(([n]) => n !== name);
-                const freePeople = people.filter(([, e]) => dominantStatus(e.hours) === "free");
-                const busyPeople = people.filter(([, e]) => dominantStatus(e.hours) === "busy");
-                const isSelected = dIso === iso;
-                const isToday = dIso === today;
-                return (
-                  <button
-                    key={dIso}
-                    style={styles.daySquare(isSelected, isToday)}
-                    onClick={() => selectDay(dIso)}
-                  >
-                    <div style={styles.daySquareNum}>{dayNumber(d)}</div>
-                    <div style={styles.daySquareLabel}>{dayLabel(d, today)}</div>
-                    <div style={styles.daySquareDots}>
-                      {freePeople.length > 0 && (
-                        <span style={styles.miniDot(GREEN)} />
-                      )}
-                      {busyPeople.length > 0 && (
-                        <span style={styles.miniDot(RED)} />
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+            {renderMonthCalendar(iso, selectDay, false)}
 
             <div id={dayAnchorId(selectedIso)} style={styles.detailPanel}>
               {selectedIso && (
@@ -7547,6 +7855,11 @@ export default function App() {
                 <div style={styles.dayDateBlock}>
                   <div style={styles.dayNum}>{dayNumber(d)}</div>
                   <div style={styles.dayName}>{dayLabel(d, today)}</div>
+                  {/* A day picked from the full calendar can be months out,
+                      where "12 sob" alone no longer says which Saturday. */}
+                  {!baseDays.includes(d) && (
+                    <div style={styles.dayName}>{monthShort(d)}</div>
+                  )}
                 </div>
                 <div style={styles.dayPeople}>
                   {/* The count stands in only on a day with no event at all.
@@ -7822,10 +8135,43 @@ export default function App() {
             </div>
           );
         })}
+        {/* Only once the list is expanded: the full calendar is for reaching
+            past the two weeks, and someone who has not yet looked at the
+            second week is not after that. Above "Pokaži manj", so collapsing
+            stays the last thing in the list as it was. */}
+        {showAllDays &&
+          (showFullCal ? (
+            <div style={styles.fullCalWrap}>
+              {renderMonthCalendar(
+                openDay,
+                (d) => {
+                  setShowFullCal(false);
+                  openEventDay(d);
+                },
+                true
+              )}
+              <button style={styles.moreDaysButton} onClick={() => setShowFullCal(false)}>
+                Skrij koledar
+              </button>
+            </div>
+          ) : (
+            <button
+              style={styles.moreDaysButton}
+              onClick={() => {
+                setCalMonth(monthOf(today));
+                setShowFullCal(true);
+              }}
+            >
+              <CalendarDays size={14} /> Pokaži celoten koledar
+            </button>
+          ))}
         {days.length > DAYS_SHOWN && (
           <button
             style={styles.moreDaysButton}
-            onClick={() => setShowAllDays((open) => !open)}
+            onClick={() => {
+              setShowAllDays((open) => !open);
+              setShowFullCal(false);
+            }}
           >
             {showAllDays
               ? "Pokaži manj"

@@ -2172,6 +2172,9 @@ export const styles = {
   },
   moreDaysButton: {
     alignSelf: "center",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
     marginTop: 4,
     padding: "9px 16px",
     fontSize: 13,
@@ -2643,14 +2646,64 @@ export const styles = {
     alignItems: "flex-start",
     padding: "0 16px",
   },
-  dayGrid: {
+  // Fixed width beside the desktop day panel; the phone's copy fills the
+  // list instead, which is all `compact` changes about the box.
+  monthCal: (compact) => ({
+    width: compact ? "100%" : 322,
+    flexShrink: 0,
+    boxSizing: "border-box",
+    ...(compact
+      ? {
+          background: "var(--card-bg)",
+          border: "1px solid var(--border)",
+          borderRadius: 14,
+          padding: 12,
+        }
+      : {}),
+  }),
+  monthCalHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  monthCalTitle: {
+    fontSize: 15,
+    fontWeight: 800,
+    color: "var(--text-heading)",
+  },
+  monthNavButton: (disabled) => ({
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    border: "1px solid var(--border)",
+    background: "var(--card-bg)",
+    color: disabled ? "var(--text-faint)" : "var(--text-secondary)",
+    opacity: disabled ? 0.5 : 1,
+    cursor: disabled ? "default" : "pointer",
+    padding: 0,
+  }),
+  monthGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
     gap: 6,
-    width: 322,
-    flexShrink: 0,
   },
-  daySquare: (selected, isToday) => ({
+  monthCalWeekday: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: "var(--text-muted)",
+    textAlign: "center",
+    textTransform: "capitalize",
+    paddingBottom: 2,
+  },
+  // A day with an event is tinted in the Dogodek badge's pink, so it can be
+  // spotted across the whole month at a glance -- the dot alone was too small
+  // to find without looking square by square. Selected and today keep their
+  // green outline, which says where you are, and the pink fill still shows.
+  monthDay: (selected, isToday, isPast, hasEvent) => ({
     aspectRatio: "1",
     display: "flex",
     flexDirection: "column",
@@ -2658,23 +2711,33 @@ export const styles = {
     justifyContent: "center",
     gap: 2,
     borderRadius: 9,
-    border: selected || isToday ? `1.5px solid ${GREEN}` : "1px solid var(--border)",
+    border:
+      selected || isToday
+        ? `1.5px solid ${GREEN}`
+        : hasEvent
+          ? `1.5px solid ${PINK}`
+          : "1px solid var(--border)",
     boxShadow: !selected && isToday ? `0 0 0 3px ${GREEN_BG}` : "none",
-    background: selected ? GREEN_BG : "var(--card-bg)",
-    cursor: "pointer",
+    background: hasEvent
+      ? `color-mix(in srgb, ${PINK} 22%, var(--card-bg))`
+      : selected
+        ? GREEN_BG
+        : "var(--card-bg)",
+    opacity: isPast ? 0.4 : 1,
+    cursor: isPast ? "default" : "pointer",
     padding: 2,
+    minWidth: 0,
   }),
+  fullCalWrap: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
   daySquareNum: {
     fontSize: 14.5,
     fontWeight: 800,
     color: "var(--text-heading)",
     lineHeight: 1.1,
-  },
-  daySquareLabel: {
-    fontSize: 11,
-    color: "var(--text-muted)",
-    textTransform: "capitalize",
-    fontWeight: 600,
   },
   daySquareDots: {
     display: "flex",

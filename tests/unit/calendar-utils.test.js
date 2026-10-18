@@ -442,3 +442,47 @@ test("sortComments: oldest first, and the input is left alone", () => {
   assert.deepEqual(m.sortComments(list).map((c) => c.text), ["prvi", "drugi", "tretji"]);
   assert.equal(list[0].text, "tretji");
 });
+
+test("nextMonth / prevMonth: step across the year boundary", () => {
+  assert.equal(m.nextMonth("2026-10"), "2026-11");
+  assert.equal(m.nextMonth("2026-12"), "2027-01");
+  assert.equal(m.prevMonth("2027-01"), "2026-12");
+  assert.equal(m.prevMonth("2026-10"), "2026-09");
+});
+
+test("lastDayOfMonth: month lengths, leap February included", () => {
+  assert.equal(m.lastDayOfMonth("2026-10"), "2026-10-31");
+  assert.equal(m.lastDayOfMonth("2026-11"), "2026-11-30");
+  assert.equal(m.lastDayOfMonth("2026-02"), "2026-02-28");
+  assert.equal(m.lastDayOfMonth("2028-02"), "2028-02-29");
+});
+
+test("monthGridCells: Monday-first padding, then every date", () => {
+  // 2026-10-01 is a Thursday: three blanks (pon, tor, sre) before it.
+  const oct = m.monthGridCells("2026-10");
+  assert.deepEqual(oct.slice(0, 4), [null, null, null, "2026-10-01"]);
+  assert.equal(oct.length, 3 + 31);
+  assert.equal(oct[oct.length - 1], "2026-10-31");
+  // 2026-06-01 is a Monday: no padding at all.
+  assert.equal(m.monthGridCells("2026-06")[0], "2026-06-01");
+  // 2026-11-01 is a Sunday: six blanks, the 1st in the last column.
+  assert.equal(m.monthGridCells("2026-11").indexOf("2026-11-01"), 6);
+});
+
+test("monthShort: lower-case three-letter month", () => {
+  assert.equal(m.monthShort("2026-12-05"), "dec");
+  assert.equal(m.monthShort("2026-08-01"), "avg");
+});
+
+test("accountName: the account's name in the hub's shapes, surname required", () => {
+  assert.equal(
+    m.accountName({ user_metadata: { first_name: "žiga", last_name: " škater " } }),
+    "Žiga Škater"
+  );
+  assert.equal(m.accountName({ user_metadata: { full_name: "Tina Brdnik" } }), "Tina Brdnik");
+  // A first name alone is not enough -- the name screen asks for the rest.
+  assert.equal(m.accountName({ user_metadata: { first_name: "Žiga" } }), "");
+  // Older accounts have no name at all; the tests' fake session has no user.
+  assert.equal(m.accountName({ user_metadata: {} }), "");
+  assert.equal(m.accountName(undefined), "");
+});

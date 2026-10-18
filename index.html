@@ -181,7 +181,19 @@
       // Brez prijave ni koledarja: RLS spušča do kv_store in arhiva samo
       // prijavljene (glej auth.js). Iz huba TomStudios se to zgodi samo.
       const { requireSignIn } = await import("./auth.js");
-      await requireSignIn(supabase);
+      const session = await requireSignIn(supabase);
+      // Ime iz računa (user_metadata first_name/last_name, kot ga hrani hub)
+      // nadomesti zaslon za vpis imena -- glej accountName v koledarju.
+      window.authUser = (session && session.user) || null;
+      // Ime, vpisano v koledarju, gre nazaj v račun, da ga pozna tudi hub in
+      // naslednja naprava. Vrne posodobljenega uporabnika.
+      window.authSetName = async (first, last) => {
+        const { data, error } = await supabase.auth.updateUser({
+          data: { first_name: first, last_name: last },
+        });
+        if (error) throw error;
+        return (data && data.user) || null;
+      };
       // Za gumb "Odjava" v aplikaciji -- odjavi račun; onAuthStateChange v
       // auth.js nato osveži stran na prijavni zaslon.
       window.authSignOut = () => supabase.auth.signOut({ scope: "local" });
@@ -275,11 +287,14 @@
         // postgres rather than fetched and sorted here. The archive asks for
         // the oldest event so it knows where history ends, and that answer
         // must not cost a scan of the whole table.
-        async firstKey(like) {
-          const { data, error } = await supabase
-            .from("kv_store")
-            .select("key")
-            .like("key", like)
+        //
+        // fromKey, when given, is a lower bound -- "the first event on or
+        // after this day" -- which is how the next event past the loaded
+        // window is found without pulling every row in between.
+        async firstKey(like, fromKey) {
+          let query = supabase.from("kv_store").select("key").like("key", like);
+          if (fromKey) query = query.gte("key", fromKey);
+          const { data, error } = await query
             .order("key", { ascending: true })
             .limit(1);
           if (error) throw error;
@@ -361,7 +376,8 @@
         set: (key, value, shared) => (shared ? sharedStore : localStore).set(key, value),
         delete: (key, shared) => (shared ? sharedStore : localStore).delete(key),
         list: (prefix, shared) => (shared ? sharedStore : localStore).list(prefix),
-        firstKey: (like, shared) => (shared ? sharedStore : localStore).firstKey(like),
+        firstKey: (like, shared, fromKey) =>
+          (shared ? sharedStore : localStore).firstKey(like, fromKey),
         range: (fromKey, toKey, shared) =>
           (shared ? sharedStore : localStore).range(fromKey, toKey),
         subscribe: (handlers, shared) =>
