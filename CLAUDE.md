@@ -116,3 +116,11 @@ every `push:*` subscription row except the event's creator.
 - Never put a Supabase `service_role` key in client code (`index.html`, `skupni-koledar.jsx`, or
   `supabase-schema.sql`) — only the `anon`/publishable key belongs there. The service_role key exists only
   in the Edge Function's environment (Supabase dashboard secrets).
+
+## Ikona aplikacije
+
+`icon.svg` (2026-10-25) is the source of the app icon. It has a diagonal gradient #6366f1 → #a855f7, a solid white calendar with two rings, and cut-outs: a header line plus a short and a long line. The style matches the Komadi icon.
+
+- Generated files: `icon-192.png`, `icon-512.png`, `icon-192-maskable.png`, `icon-512-maskable.png`, `apple-touch-icon.png`.
+- On the maskable and apple-touch icons the calendar is drawn smaller (scale 0.8 instead of 1.1), so the phone doesn't crop it.
+- The Dogodki card in TomStudios (`apps-registry.js`) must always show the same solid calendar.
