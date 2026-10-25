@@ -809,10 +809,9 @@ export const styles = {
   // the seam give up the space, rather than the strip growing. That also
   // keeps every slot worth exactly one unit of the drift's offset.
   //
-  // Which is why the extra is 3px a side and not more. The cards are square,
-  // so whatever a card gives up in width it also loses in height, and past
-  // about this much the two beside the seam visibly sit shorter than the
-  // rest of the run.
+  // Which is why the extra is 3px a side and not more: past about this much
+  // the two cards beside the seam visibly sit narrower than the rest of the
+  // run. (They were once square and lost height with it too.)
   recentEventSlot: (percent, seamBefore, seamAfter) => ({
     flex: `0 0 ${percent}%`,
     minWidth: 0,
@@ -837,23 +836,20 @@ export const styles = {
   // Rendered as a <button> (it opens the event's day), so it carries the
   // usual button resets: without them the card would pick up the UA's font
   // and centre its text.
-  recentEventCard: (hue, dragging, contentHeight, wide) => ({
+  recentEventCard: (hue, dragging, contentHeight) => ({
     font: "inherit",
     color: "inherit",
     textAlign: "left",
     // While a drag is in flight the whole strip is being grabbed, so the
     // cursor should say that rather than advertise a click that won't happen.
     cursor: dragging ? "grabbing" : "pointer",
-    // Square keeps a row of three (or the sliding run) even; but one or two
-    // wide cards forced square just tower over their own text, so there they
-    // shrink to fit what's written in them instead.
-    //
-    // `wide` is two across (a phone): there the card takes its height from
-    // its text, with no empty bottom under the four rows. height: 100% keeps
-    // the run even all the same -- the track is a flex row, so every slot
+    // Height from the text on both layouts. The desktop's used to be square,
+    // and a square a quarter of a 1100px column wide is a billboard with four
+    // short rows at its top and nothing under them. height: 100% keeps the
+    // run even all the same -- the track is a flex row, so every slot
     // stretches to the tallest card, and each card then fills its slot.
-    aspectRatio: contentHeight || wide ? "auto" : "1",
-    height: wide && !contentHeight ? "100%" : undefined,
+    // One or two cards on their own are just sized to their text.
+    height: contentHeight ? undefined : "100%",
     width: "100%",
     minWidth: 0,
     boxSizing: "border-box",
@@ -909,6 +905,25 @@ export const styles = {
     fontSize: 16,
     fontWeight: 800,
     color: "var(--text-heading)",
+  },
+  // The desktop's card: the same four rows, lettered for a screen read from
+  // arm's length rather than from the palm.
+  recentEventCardLarge: {
+    padding: "12px 14px",
+    gap: 4,
+    borderRadius: 16,
+  },
+  recentEventTitleLarge: {
+    fontSize: 17.5,
+  },
+  recentEventDateLarge: {
+    fontSize: 14.5,
+  },
+  recentEventTimeLarge: {
+    fontSize: 20,
+  },
+  recentEventPlaceLarge: {
+    fontSize: 14,
   },
   recentEventPlace: {
     fontSize: 12.5,
@@ -2927,19 +2942,58 @@ export const styles = {
     flex: 1,
     display: "flex",
     flexDirection: "column",
-    maxWidth: 980,
+    maxWidth: 1180,
     width: "100%",
+    // Or the side padding comes on top of the 100% and every window narrower
+    // than the max width scrolls sideways by 16px.
+    boxSizing: "border-box",
     margin: "0 auto",
     padding: "0 8px",
   },
+  // The left column is a phone's width on purpose: the day rows and the
+  // month grid were drawn for that, and stretched any wider the rows are a
+  // date at one end and a badge at the other with nothing between.
   desktopLayout: {
-    display: "flex",
-    gap: 20,
-    alignItems: "flex-start",
+    display: "grid",
+    gridTemplateColumns: "minmax(340px, 380px) minmax(0, 1fr)",
+    gap: 24,
+    alignItems: "start",
     padding: "0 16px",
   },
-  // Fixed width beside the desktop day panel; the phone's copy fills the
-  // list instead, which is all `compact` changes about the box.
+  desktopSide: {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+  desktopMain: {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+  // recentEventsHeading without its page-edge inset: in a column the edge
+  // is already the column's.
+  desktopHeading: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: GREEN,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    padding: "0 4px",
+    marginBottom: 14,
+  },
+  desktopWeek: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  // The reminder brings its own page-edge padding from the phone; pulled
+  // back here so its card lines up with the day panel under it.
+  desktopReminder: {
+    margin: "0 -16px 18px",
+  },
+  // The phone's month and the desktop's are the same card now -- it sits in
+  // the desktop's left column at the column's width. `compact` false is the
+  // bare, fixed-width grid the desktop used to put beside its day panel.
   monthCal: (compact) => ({
     width: compact ? "100%" : 322,
     flexShrink: 0,

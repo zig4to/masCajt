@@ -1556,6 +1556,9 @@ export function entryCountLabel(n) {
   return `${n} vnosov`;
 }
 
+// Not 1024: below it the phone's column stretches across a tablet, and its
+// month grid turns into seven 120px squares. At 860 the two desktop columns
+// still leave the day panel wider than a phone.
 function useIsDesktop(breakpoint = 860) {
   const [isDesktop, setIsDesktop] = useState(
     typeof window !== "undefined" ? window.innerWidth >= breakpoint : false
@@ -1571,9 +1574,13 @@ function useIsDesktop(breakpoint = 860) {
 }
 // "Aktualni dogodki" cards across the strip. Two on a phone: at three, a
 // card a third of the screen wide had room for a name of about ten letters
-// and cut nearly every one. The desktop keeps three -- two across its width
-// would be two billboards.
-const CARDS_IN_VIEW = 3;
+// and cut nearly every one. The desktop shows five on a full-width window,
+// each a fixed fifth of the row -- at three across, each card was a slab --
+// and four on a narrower one, where a fifth was too short for "Odbojka na
+// mivki" in the desktop's bigger lettering.
+const CARDS_IN_VIEW = 5;
+const CARDS_IN_VIEW_NARROW_DESKTOP = 4;
+const WIDE_DESKTOP_MIN = 1180;
 const CARDS_IN_VIEW_PHONE = 2;
 
 // Three across. Four fitted, but a picture is not a label -- it has to be
@@ -1728,12 +1735,13 @@ const CHANGELOG = [
 
 const DAYS_SHOWN = 7;
 
-// How far ahead the calendar loads on arrival, today included. A month, so
-// "Aktualni dogodki" can show everything planned in the next thirty days --
-// not just the next two weeks, which left a Saturday three weeks out off the
-// strip entirely. The week list still shows only DAYS_SHOWN of them; the rest
-// is there for the strip, the calendar's marks and a day picked from it.
-const WINDOW_DAYS = 30;
+// How far ahead the calendar loads on arrival, today included. A month and a
+// half, so "Aktualni dogodki" shows everything planned that far out -- it was
+// two weeks, which left a Saturday three weeks out off the strip entirely,
+// then thirty days, which still dropped an outing planned for early next
+// month. The week list still shows only DAYS_SHOWN of them; the rest is there
+// for the strip, the calendar's marks and a day picked from it.
+const WINDOW_DAYS = 45;
 
 // Column heads of the month grid, Monday first to match monthGridCells.
 const MONTH_GRID_WEEKDAYS = ["pon", "tor", "sre", "čet", "pet", "sob", "ned"];
@@ -2369,6 +2377,7 @@ function RecentEventsCarousel({
   today,
   drift,
   perView = CARDS_IN_VIEW,
+  large = false,
 }) {
   const count = events.length;
   const {
@@ -2418,10 +2427,18 @@ function RecentEventsCarousel({
   // is not a jump. `recentEventsTrack` turns this into the track width
   // (extended.length / trackPerView), and `slotPercent` already divides that
   // track evenly, so the slots land at half, half-and-half, or thirds.
-  const trackPerView = canSlide ? perView : Math.min(Math.max(count, 2), perView);
-  // One or two wide cards drop the square and take their height from the text.
-  // A row of three, or the sliding run, stays square so the run reads even.
-  const cardsFitContent = !canSlide && count <= 2;
+  //
+  // Not on the desktop (`large`): there every card keeps its fixed slot of
+  // the row however few there are, and a short row just ends early. Spread to
+  // fill the width, three events were three 380px slabs with a name in the
+  // corner of each.
+  const trackPerView =
+    canSlide || large ? perView : Math.min(Math.max(count, 2), perView);
+  // One or two wide cards take their height from the text; a run of them
+  // stretches to the tallest so it reads even.
+  const cardsFitContent = !canSlide && !large && count <= 2;
+  // The desktop's bigger lettering, laid over the phone's styles.
+  const withLarge = (base, extra) => (large ? { ...base, ...extra } : base);
 
   return (
     <>
@@ -2478,11 +2495,9 @@ function RecentEventsCarousel({
               {seamAfter && <div style={styles.recentEventsSeam} />}
               <button
                 type="button"
-                style={styles.recentEventCard(
-                  hue,
-                  dragging,
-                  cardsFitContent,
-                  perView < CARDS_IN_VIEW
+                style={withLarge(
+                  styles.recentEventCard(hue, dragging, cardsFitContent),
+                  styles.recentEventCardLarge
                 )}
                 onClick={() => {
                   if (wasDragged()) return;
@@ -2494,12 +2509,22 @@ function RecentEventsCarousel({
                     the width for it, and "sob. 24.10" made you decode it.
                     The keyword gave way to the place: the card is a fixed
                     shape and has room for four short rows, not five. */}
-                <div style={styles.recentEventTitle}>{ev.title}</div>
-                <div style={styles.recentEventDate}>{eventWhenLabel(ev._iso, "")}</div>
+                <div style={withLarge(styles.recentEventTitle, styles.recentEventTitleLarge)}>
+                  {ev.title}
+                </div>
+                <div style={withLarge(styles.recentEventDate, styles.recentEventDateLarge)}>
+                  {eventWhenLabel(ev._iso, "")}
+                </div>
                 {ev.duration && (
-                  <div style={styles.recentEventTime}>{splitDuration(ev.duration).start}</div>
+                  <div style={withLarge(styles.recentEventTime, styles.recentEventTimeLarge)}>
+                    {splitDuration(ev.duration).start}
+                  </div>
                 )}
-                {ev.place && <div style={styles.recentEventPlace}>{ev.place}</div>}
+                {ev.place && (
+                  <div style={withLarge(styles.recentEventPlace, styles.recentEventPlaceLarge)}>
+                    {ev.place}
+                  </div>
+                )}
               </button>
             </div>
           ))}
@@ -2735,7 +2760,7 @@ export default function App() {
   // without it the full calendar could only mark events in the month the
   // list already shows -- exactly the ones you did not open it for.
   const [monthEventDays, setMonthEventDays] = useState({});
-  // The day of the nearest event past the thirty days, looked up only when
+  // The day of the nearest event past the WINDOW_DAYS, looked up only when
   // those days hold nothing after today. Without it "Naslednji dogodek"
   // and the event strip went blank for anything planned three weeks out, as
   // if nothing were planned at all.
@@ -2922,6 +2947,7 @@ export default function App() {
   const dragActionRef = useRef("set");
   const hasAutoOpenedRef = useRef(false);
   const isDesktop = useIsDesktop();
+  const isWideDesktop = useIsDesktop(WIDE_DESKTOP_MIN);
 
   useEffect(() => {
     const start = todayIso();
@@ -2952,7 +2978,7 @@ export default function App() {
 
   // Booleans rather than dayEvents itself in the effect's deps, so it asks
   // the server only when the answer can have changed: an event appearing in
-  // the thirty days (no lookahead needed), or the looked-ahead day losing its
+  // the WINDOW_DAYS (no lookahead needed), or the looked-ahead day losing its
   // event. An array there, empty, is a loaded day with nothing on it --
   // undefined is one not read yet, and must not count as gone or this would
   // re-ask in a loop before the day ever loads.
@@ -5283,18 +5309,18 @@ export default function App() {
   // put last month's outings in "Aktualni dogodki" the moment anyone opened
   // the archive.
   //
-  // The base thirty days only, not everything `days` has grown to: paging
+  // The base WINDOW_DAYS only, not everything `days` has grown to: paging
   // the desktop month view forward would otherwise fill the strip with events
   // from whichever month you happened to look at last.
   const upcomingEvents = {};
   for (const iso of baseDays) {
     if (dayEvents[iso]) upcomingEvents[iso] = dayEvents[iso];
   }
-  // The strip: every event in the next thirty days, soonest leftmost.
+  // The strip: every event in the next WINDOW_DAYS, soonest leftmost.
   const stripEvents = eventsNearestFirst(upcomingEvents);
   // The same plus the looked-ahead day, for "Naslednji dogodek" -- set only
-  // when the thirty days hold nothing further on. Kept off the strip, which
-  // promises the next thirty days and nothing past them.
+  // when the WINDOW_DAYS hold nothing further on. Kept off the strip, which
+  // promises the next WINDOW_DAYS and nothing past them.
   const recentEvents =
     aheadIso && dayEvents[aheadIso]
       ? eventsNearestFirst({ ...upcomingEvents, [aheadIso]: dayEvents[aheadIso] })
@@ -5386,13 +5412,19 @@ export default function App() {
   //
   // Only the drift stops. A drag is something a person asked for, and it
   // still works: with more than three events the rest are still reachable.
+  const stripPerView = !isDesktop
+    ? CARDS_IN_VIEW_PHONE
+    : isWideDesktop
+      ? CARDS_IN_VIEW
+      : CARDS_IN_VIEW_NARROW_DESKTOP;
   const recentEventsRow = (
     // Keyed on the count across: the strip's position is measured in card
     // widths, and a window resized across the breakpoint would otherwise
     // carry an offset counted in the other layout's cards.
     <RecentEventsCarousel
-      key={isDesktop ? "desktop" : "phone"}
-      perView={isDesktop ? CARDS_IN_VIEW : CARDS_IN_VIEW_PHONE}
+      key={stripPerView}
+      perView={stripPerView}
+      large={isDesktop}
       events={stripEvents}
       eventHues={eventHues}
       onSelectDay={openEventDay}
@@ -7493,16 +7525,21 @@ export default function App() {
     </>
   );
 
-  const reminderStrip =
-    reminderPages.length === 0 ? null : reminderPages.length === 1 ? (
-      renderReminderPage(reminderPages[0])
+  // Keyed on which pages it holds: the desktop drops the selected day's
+  // pages, so the set changes under a mounted strip, and an index into the
+  // old set could point past the end of the new one.
+  const renderReminderStrip = (pages) =>
+    pages.length === 0 ? null : pages.length === 1 ? (
+      renderReminderPage(pages[0])
     ) : (
       <AlternatingReminder
-        pages={reminderPages}
+        key={pages.map((p) => `${p.iso}:${p.onlyId || ""}`).join("|")}
+        pages={pages}
         renderPage={renderReminderPage}
         autoRotate={reminderRotate}
       />
     );
+  const reminderStrip = renderReminderStrip(reminderPages);
 
   // One month as a grid, shared by the desktop layout (beside the day panel)
   // and the phone (under the day list, so `compact`). Days before today are
@@ -7511,7 +7548,7 @@ export default function App() {
   // turned back past this one.
   //
   // Availability dots only appear on days that are loaded -- on the phone the
-  // thirty days plus anything picked. Event marks come from monthEventDays as
+  // WINDOW_DAYS plus anything picked. Event marks come from monthEventDays as
   // well, so those show across the whole month either way.
   // On desktop the day panel follows the month: today when turning back to
   // this month, the 1st otherwise. Left on a day of the month just paged
@@ -7594,6 +7631,9 @@ export default function App() {
       a === name ? -1 : b === name ? 1 : a.localeCompare(b)
     );
     const isEditing = editingDay === iso;
+    const desktopReminderStrip = renderReminderStrip(
+      reminderPages.filter((p) => p.iso !== selectedIso)
+    );
 
     return (
       <div style={styles.pageDesktop}>
@@ -7610,8 +7650,6 @@ export default function App() {
 
           {todayPhotoStrip}
 
-          {reminderStrip}
-
           {error && <div style={styles.errorBanner}>{error}</div>}
 
           {refreshing && (
@@ -7620,10 +7658,34 @@ export default function App() {
             </div>
           )}
 
-          <div style={styles.recentEventsHeading}>Koledar dogodkov</div>
-
+          {/* Two columns: what to pick from on the left -- the phone's week
+              and its month, in the same order -- and what was picked on the
+              right. The week used to be missing here altogether, so the
+              desktop's only way into next Friday was to find it in the grid. */}
           <div style={styles.desktopLayout}>
-            {renderMonthCalendar(iso, selectDay, false)}
+            <div style={styles.desktopSide}>
+              <div style={styles.desktopHeading}>Pregled tedna</div>
+              <div style={styles.desktopWeek}>
+                {baseDays
+                  .slice(0, DAYS_SHOWN)
+                  .map((d) => renderDayCard(d, { selected: selectedIso }))}
+              </div>
+
+              <div style={{ ...styles.desktopHeading, marginTop: 26 }}>
+                Koledar dogodkov
+              </div>
+              {renderMonthCalendar(iso, selectDay, true)}
+            </div>
+
+            <div style={styles.desktopMain}>
+            {/* Over the day rather than across the whole page: at full width
+                it was a 1100px banner for one card. Without the pages for the
+                day the panel is showing -- the panel starts on today, and
+                "Se vidimo danes" over it was the same event twice, one above
+                the other. */}
+            {desktopReminderStrip && (
+              <div style={styles.desktopReminder}>{desktopReminderStrip}</div>
+            )}
 
             <div id={dayAnchorId(selectedIso)} style={styles.detailPanel}>
               {selectedIso && (
@@ -7855,6 +7917,7 @@ export default function App() {
                 </>
               )}
             </div>
+            </div>
           </div>
 
           {renderWhatsNewSection()}
@@ -7877,7 +7940,7 @@ export default function App() {
   // everything further out is reached from the calendar under it.
   const listDays = baseDays.slice(0, DAYS_SHOWN);
 
-  function renderDayCard(d) {
+  function renderDayCard(d, row) {
     const iso = d;
     const entries = dayData[iso] || {};
     const allEntries = Object.entries(entries).sort(([a], [b]) =>
@@ -7905,16 +7968,28 @@ export default function App() {
       chipSeedRef.current + iso
     ).map((n) => [n, personColors[n] || NEUTRAL_BG]);
     const hiddenChips = dayChips.length - DAY_CHIPS_SHOWN;
-    const isOpen = openDay === iso;
+    // On the desktop the card is only its header row: the day opens in the
+    // panel beside the list, not under the row, so the row just marks which
+    // day that is. Without an anchor id too -- the panel holds that one, and
+    // two elements with it sent the scroll to whichever came first.
+    const isOpen = row ? row.selected === iso : openDay === iso;
     const isToday = iso === today;
     // Only the header shrinks; an opened day's contents keep their size.
     const quiet = isQuietWeekday(iso);
 
     return (
-      <div key={iso} id={dayAnchorId(iso)} style={styles.dayCard(isToday, isOpen)}>
+      <div
+        key={iso}
+        id={row ? undefined : dayAnchorId(iso)}
+        style={styles.dayCard(isToday, isOpen)}
+      >
         <button
           style={quiet ? { ...styles.dayHeader, ...styles.dayHeaderQuiet } : styles.dayHeader}
-          onClick={() => openDayCard(iso)}
+          onClick={() => {
+            if (!row) return openDayCard(iso);
+            setCalMonth(monthOf(iso));
+            selectDay(iso);
+          }}
         >
           <div style={styles.dayDateBlock}>
             <div style={quiet ? { ...styles.dayNum, ...styles.dayNumQuiet } : styles.dayNum}>
@@ -7974,14 +8049,14 @@ export default function App() {
             size={18}
             color="var(--text-faint)"
             style={{
-              transform: isOpen ? "rotate(90deg)" : "none",
+              transform: isOpen && !row ? "rotate(90deg)" : "none",
               transition: "transform 150ms ease",
               flexShrink: 0,
             }}
           />
         </button>
 
-        {isOpen && (
+        {isOpen && !row && (
           <div style={styles.dayDetail}>
             {editingDay === iso ? (
               <>
@@ -8241,7 +8316,7 @@ export default function App() {
       <div style={styles.recentEventsHeading}>Pregled tedna</div>
 
       <div style={styles.list}>
-        {listDays.map(renderDayCard)}
+        {listDays.map((d) => renderDayCard(d))}
         {/* A day from beyond the seven sits apart, under a line, so it is
             plain that it was picked rather than that the list skipped ahead. */}
         {pickedDay && !listDays.includes(pickedDay) && (
