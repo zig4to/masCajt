@@ -1,5 +1,5 @@
 // Prijava prek Supabase Auth (e-pošta + geslo) -- isti računi kot v hubu
-// TomStudios in ostalih aplikacijah (projekt ProjektiBaze). Koledar se
+// Bitneverse in ostalih aplikacijah (projekt ProjektiBaze). Koledar se
 // izriše šele, ko je seja na voljo: RLS na kv_store in v bucketu arhiv
 // spušča samo prijavljene, zato bi anonimni izris pokazal prazen koledar.
 //
@@ -284,7 +284,7 @@ export async function requireSignIn(sb) {
 }
 
 // Prijavljen še ne pomeni dovoljen: admin v hubu dodeli dostop do Dogodkov
-// (has_app_access v ProjektiBaze, supabase/005_admin.sql v TomStudios).
+// (has_app_access v ProjektiBaze, supabase/005_admin.sql v Bitneverse).
 // Prava zaščita so politike RLS na kv_store; to je le prijazno sporočilo
 // namesto praznega koledarja. Ob napaki (npr. funkcije še ni) pustimo naprej.
 async function requireAppAccess(sb) {

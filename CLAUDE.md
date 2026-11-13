@@ -104,14 +104,14 @@ every `push:*` subscription row except the event's creator.
 - The UI text is Slovenian; keep new user-facing strings in Slovenian and consistent with the existing
   tone (informal/friendly).
 - Access requires a Supabase Auth account (`auth.js`, e-mail + password, same accounts and project —
-  ProjektiBaze — as the TomStudios hub). `index.html` awaits `requireSignIn()` before rendering the app;
+  ProjektiBaze — as the Bitneverse hub). `index.html` awaits `requireSignIn()` before rendering the app;
   arriving from the hub signs in automatically (`#sb_at`/`#sb_rt` hash, or the session the hub left in
   localStorage on the shared `zig4to.github.io` origin). RLS grants `kv_store` only to `authenticated`.
   The person's calendar *name* comes from the account (`user_metadata` first/last name, via
   `window.authUser` and `accountName()`), so the name screen only appears for an account with no name;
   a name typed there is written back to the account (`window.authSetName`). A name already saved on the
   device (`my-name`) still wins over the account's, so differently spelled old entries don't split. Access is also per user: RLS policies require `has_app_access('mascajt')`, which an admin
-  grants in the TomStudios hub (Administracija); `auth.js` shows a "no access" screen otherwise.
+  grants in the Bitneverse hub (Administracija); `auth.js` shows a "no access" screen otherwise.
   `ADMIN_NAME`/`AUTH_CODE` (top of `skupni-koledar.jsx`) still gate admin-only actions.
 - Never put a Supabase `service_role` key in client code (`index.html`, `skupni-koledar.jsx`, or
   `supabase-schema.sql`) — only the `anon`/publishable key belongs there. The service_role key exists only
@@ -123,4 +123,4 @@ every `push:*` subscription row except the event's creator.
 
 - Generated files: `icon-192.png`, `icon-512.png`, `icon-192-maskable.png`, `icon-512-maskable.png`, `apple-touch-icon.png`.
 - On the maskable and apple-touch icons the calendar is drawn smaller (scale 0.8 instead of 1.1), so the phone doesn't crop it.
-- The Dogodki card in TomStudios (`apps-registry.js`) must always show the same solid calendar.
+- The Dogodki card in Bitneverse (`apps-registry.js`) must always show the same solid calendar.

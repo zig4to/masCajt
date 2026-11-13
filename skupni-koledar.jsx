@@ -595,7 +595,7 @@ export function hasSurname(full) {
   return (full || "").trim().split(/\s+/).filter(Boolean).length >= 2;
 }
 
-// The calendar name a TomStudios account already carries, or "" when it has
+// The calendar name a Bitneverse account already carries, or "" when it has
 // none. Reads user_metadata in the same shapes the hub's fullNameFor does --
 // first_name/last_name from its sign-up form, else given/family or a single
 // full_name/name/display_name -- so the two never disagree about who you are.
@@ -3179,7 +3179,7 @@ export default function App() {
     }
   }
 
-  // Since sign-in became a TomStudios account, the account's own name stands
+  // Since sign-in became a Bitneverse account, the account's own name stands
   // in for the name screen: whoever is signed in is who is using the
   // calendar. A name already saved on this device still wins, though --
   // someone who entered "Ziga Skater" here long before the account said
@@ -3961,7 +3961,7 @@ export default function App() {
     } catch (e) {
       console.error("logout storage error:", e);
     }
-    // Odjavi še račun (isti kot v TomStudios); stran se nato osveži na
+    // Odjavi še račun (isti kot v Bitneverse); stran se nato osveži na
     // prijavni zaslon. Brez index.html (testi) te funkcije ni.
     if (window.authSignOut) await window.authSignOut();
   }

@@ -21,11 +21,11 @@ alter table kv_store enable row level security;
 -- what would otherwise issue this grant implicitly), so it's explicit here.
 --
 -- Only "authenticated": the calendar sits behind Supabase Auth (auth.js),
--- with the same accounts as the TomStudios hub. anon gets no grant at all,
+-- with the same accounts as the Bitneverse hub. anon gets no grant at all,
 -- so the policies below -- written without a role, i.e. for everyone --
 -- never reach a visitor who is not signed in. Being signed in is not enough
 -- either: every policy also requires has_app_access('mascajt'), granted per
--- user by an admin in the TomStudios hub (TomsStudios/supabase/005_admin.sql).
+-- user by an admin in the Bitneverse hub (TomsStudios/supabase/005_admin.sql).
 grant select, insert, update, delete on table kv_store to authenticated;
 revoke all on table kv_store from anon;
 

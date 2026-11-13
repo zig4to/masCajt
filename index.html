@@ -179,7 +179,7 @@
       const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
       // Brez prijave ni koledarja: RLS spušča do kv_store in arhiva samo
-      // prijavljene (glej auth.js). Iz huba TomStudios se to zgodi samo.
+      // prijavljene (glej auth.js). Iz huba Bitneverse se to zgodi samo.
       const { requireSignIn } = await import("./auth.js");
       const session = await requireSignIn(supabase);
       // Ime iz računa (user_metadata first_name/last_name, kot ga hrani hub)
